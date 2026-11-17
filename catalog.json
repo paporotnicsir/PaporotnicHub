@@ -1,0 +1,22 @@
+{
+  "version": "0.1.0",
+  "latestVersion": "Paporotnic Hub Core v0.1.0",
+  "lifetimePrice": "Уточняется / TBA",
+  "announcement": "Первый модуль: Disassemble Car Tycoon. Новые игры скоро.",
+  "auth": {
+    "mode": "public",
+    "verifyUrl": ""
+  },
+  "games": [
+    {
+      "id": "disassemble_car_tycoon",
+      "title": "Disassemble Car Tycoon",
+      "description": "Containers ESP, TP, Movement, Auction, Configs",
+      "version": "v9.0",
+      "placeIds": [89472775643845],
+      "universeId": 10537055421,
+      "script": "https://raw.githubusercontent.com/paporotnicsir/PaporotnicHub/refs/heads/main/hub.lua",
+      "enabled": true
+    }
+  ]
+}
