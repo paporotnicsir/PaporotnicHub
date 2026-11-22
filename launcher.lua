@@ -75,7 +75,7 @@ local FALLBACK = {
             updates = {}
         }
     },
-    auth = { mode = "public", verifyUrl = "" },
+    auth = { mode = "server", verifyUrl = "" },
     games = {
         {
             id = "disassemble_car_tycoon", title = "Disassemble Car Tycoon",
@@ -214,8 +214,8 @@ end
 
 local uiConnections = {}
 local alive = true
-local authenticated = catalog.auth.mode == "public"
-local authMode = catalog.auth.mode or "public"
+local authenticated = false
+local authMode = "server"  -- fail closed, even with an offline or stale catalog
 local selectedTab = "home"
 local statusText = ""
 local screen, root, content, statusLabel, titleLabel, footerLabel
@@ -355,49 +355,93 @@ local function ensureHubFernAsset()
     return ensureAsset(HUB_FERN_URL, LOCAL_HUB_FERN_PATH)
 end
 
-local function verifyKey(key)
+local verifyingKey = false
+local approvedKey = nil
+
+local function verifyKey(key, onSuccess)
     local auth = catalog.auth or {}
-    if authMode == "public" then info(T("later"),true); return end
-    if authMode ~= "server" or type(auth.verifyUrl) ~= "string" or not auth.verifyUrl:match("^https://") then info(T("authNeedServer"),true); return end
+    local url = auth.verifyUrl
+    if type(url) ~= "string" or not url:match("^https://") or not url:match("/v1/verify$") then
+        info(T("authNeedServer"), true)
+        return
+    end
     local requester = (syn and syn.request) or http_request or request
-    if type(requester) ~= "function" then info(T("verifyFail"),true) return end
-    if #key < 4 or #key > 128 then info(T("invalid"),true) return end
-    info("Verifying...")
+    if type(requester) ~= "function" then info(T("verifyFail"), true); return end
+    key = tostring(key or ""):match("^%s*(.-)%s*$")
+    if #key < 4 or #key > 128 then info(T("invalid"), true); return end
+    if verifyingKey then return end
+
+    verifyingKey = true
+    authenticated = false
+    approvedKey = nil
+    info(lang == "ru" and "Проверяем ключ..." or "Verifying key...")
     task.spawn(function()
         local success, result = pcall(function()
-            return requester({Url = auth.verifyUrl, Method = "POST", Headers = {["Content-Type"]="application/json"}, Body = HttpService:JSONEncode({key=key})})
+            return requester({
+                Url = url,
+                Method = "POST",
+                Headers = { ["Content-Type"] = "application/json" },
+                Body = HttpService:JSONEncode({ key = key, hub = "paporotnic-hub" }),
+            })
         end)
         if not alive then return end
-        if not success or type(result) ~= "table" then info(T("verifyFail"),true) return end
-        local code = tonumber(result.StatusCode or result.Status)
-        if code ~= 200 then info(T("verifyFail"),true) return end
-        local parseOK, data = pcall(function() return HttpService:JSONDecode(result.Body or "") end)
-        if parseOK and type(data)=="table" and data.valid == true then
-            authenticated=true
+        verifyingKey = false
+        if not success or type(result) ~= "table" then info(T("verifyFail"), true); return end
+
+        local status = tonumber(result.StatusCode or result.Status)
+        local parsed, data = pcall(function() return HttpService:JSONDecode(result.Body or "") end)
+        if not parsed or type(data) ~= "table" then info(T("verifyFail"), true); return end
+
+        if status == 200 and data.ok == true and data.code == "valid" and data.hub == "paporotnic-hub" then
+            authenticated = true
+            approvedKey = key
             info(T("activated"))
             task.defer(function() if alive then render() end end)
-        else
-            authenticated=false
-            info(T("invalid"),true)
+            if type(onSuccess) == "function" then onSuccess() end
+            return
         end
+
+        authenticated = false
+        approvedKey = nil
+        local reason = data.code
+        if status == 429 or reason == "rate_limited" then
+            info(lang == "ru" and "Слишком много проверок. Попробуй позже." or "Too many attempts. Try later.", true)
+        elseif reason == "expired" then
+            info(lang == "ru" and "Срок действия ключа истёк." or "Key has expired.", true)
+        elseif reason == "revoked" then
+            info(lang == "ru" and "Ключ заблокирован." or "Key was revoked.", true)
+        elseif status == 403 or reason == "invalid_key" then
+            info(T("invalid"), true)
+        else
+            info(T("verifyFail"), true)
+        end
+        task.defer(function() if alive then render() end end)
     end)
 end
+
 local function launch(row)
-    if not authenticated then info(T("unauth"),true); return end
+    if verifyingKey then return end
+    if not authenticated or type(approvedKey) ~= "string" then info(T("unauth"),true); return end
     if not isSupported(row) then info(T("unsupported"),true); return end
     if row.enabled == false then info(T("unavailable"),true); return end
     if not trustedUrl(row.script) then info(T("badUrl"),true); return end
-    info(T("loading"))
-    task.spawn(function()
-        local fetched, code = pcall(function() return game:HttpGet(row.script) end)
-        if not alive then return end
-        if not fetched or type(code)~="string" then info(T("loadFail")..tostring(code),true); return end
-        if type(loadstring)~="function" then info(T("loadFail").."loadstring unavailable",true); return end
-        local buildOK, fn = pcall(function() return loadstring(code) end)
-        if not buildOK or type(fn)~="function" then info(T("loadFail")..tostring(fn),true); return end
-        local launched,err=pcall(fn)
-        if not alive then return end
-        if launched then info(T("loaded")); screen.Enabled=false else info(T("loadFail")..tostring(err),true) end
+
+    -- Check the key again immediately before loading a game module.
+    -- A key revoked/expired since the initial activation must be rejected.
+    verifyKey(approvedKey, function()
+        if not alive or not authenticated then return end
+        info(T("loading"))
+        task.spawn(function()
+            local fetched, code = pcall(function() return game:HttpGet(row.script) end)
+            if not alive then return end
+            if not fetched or type(code)~="string" then info(T("loadFail")..tostring(code),true); return end
+            if type(loadstring)~="function" then info(T("loadFail").."loadstring unavailable",true); return end
+            local buildOK, fn = pcall(function() return loadstring(code) end)
+            if not buildOK or type(fn)~="function" then info(T("loadFail")..tostring(fn),true); return end
+            local launched,err=pcall(fn)
+            if not alive then return end
+            if launched then info(T("loaded")); screen.Enabled=false else info(T("loadFail")..tostring(err),true) end
+        end)
     end)
 end
 
