@@ -1,5 +1,5 @@
--- PAPOROTNIC HUB | universal launcher v0.2.16
--- 3-second loading gate, key-only entry, and quiet accent-glow interface.
+-- PAPOROTNIC HUB | universal launcher v0.2.17
+-- 3-second loading gate, key-only entry, subtle accent glow and static fern border.
 -- Based on the user's v0.2.14 launcher; auth API and game module flow preserved.
 
 local Players = game:GetService("Players")
@@ -18,8 +18,11 @@ end
 
 local BASE = "https://raw.githubusercontent.com/paporotnicsir/PaporotnicHub/refs/heads/main/"
 local CATALOG_URL = BASE .. "catalog.json"
+-- Decorative PNG is stored in the same GitHub repository, under assets/.
+local FERN_BORDER_URL = BASE .. "assets/hub_fern_border.png"
+local FERN_BORDER_PATH = "PaporotnicHub/assets/hub_fern_border.png"
 local FALLBACK = {
-    version = "0.2.16 (offline catalog)",
+    version = "0.2.17 (offline catalog)",
     latestVersion = "Paporotnic Hub Core v0.2.8",
     lifetimePrice = "$ ?? / TBA",
     announcement = "Welcome, LIL Paporotnics! The universal hub is online.",
@@ -34,6 +37,9 @@ local FALLBACK = {
             id = "release-020", version = "v0.2.0", name = "Launcher redesign",
             summary = "Larger interface, fern background and a dedicated Releases page.",
             updates = {
+                {version = "v0.2.17", title = "Fern border accent",
+                  body = "Added a static transparent fern border at the bottom edge of the main hub; no drifting background.",
+                  bodyRu = "Внизу основного хаба добавлена статичная прозрачная кайма из папоротников, без движущегося фона."},
                 {version = "v0.2.16", title = "Key options preview",
                   body = "Added yellow Get Key and gently shimmering green Lifetime buttons below the key activation field.",
                   bodyRu = "Добавлены жёлтая кнопка Get Key и мягко переливающаяся зелёная Lifetime под активацией ключа."},
@@ -125,7 +131,7 @@ local strings = {
         releaseSub="Новости и изменения Paporotnic Hub", totalGames="Игр в каталоге", authState="Статус доступа",
         accessPublic="PUBLIC / TEST", accessGranted="Ключ активирован", accessNeed="Ожидает ключ",
         patches="ПОДОБНОВЛЕНИЙ", expandedHint="Нажми на релиз, чтобы увидеть изменения",
-        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.16 (TEST)",
+        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.17 (TEST)",
         themeHeading="ТЕМА ОФОРМЛЕНИЯ", themeHint="Изменения применяются сразу. Сохранение работает, если исполнитель поддерживает запись файлов.",
         themeForest="ЛЕСНАЯ", themeOcean="НОЧНОЙ ОКЕАН", themeEmber="ЗАКАТ", themeViolet="ФИОЛЕТОВАЯ", themeActive="ВЫБРАНО",
          gateSubtitle="Для доступа к хабу требуется ключ", gateIdle="Введите ключ для продолжения.",
@@ -150,7 +156,7 @@ local strings = {
         releaseSub="News and changes for Paporotnic Hub", totalGames="Games in catalog", authState="Access status",
         accessPublic="PUBLIC / TEST", accessGranted="Key activated", accessNeed="Awaiting key",
         patches="PATCHES", expandedHint="Click a release to view its updates",
-        releaseBuild="LAUNCHER BUILD: v0.2.16 (TEST)",
+        releaseBuild="LAUNCHER BUILD: v0.2.17 (TEST)",
         themeHeading="COLOR THEME", themeHint="Themes apply instantly. Saving needs executor file access.",
         themeForest="FOREST", themeOcean="NIGHT OCEAN", themeEmber="SUNSET", themeViolet="VIOLET", themeActive="ACTIVE",
          gateSubtitle="An access key is required to continue", gateIdle="Enter your key to continue.",
@@ -350,7 +356,35 @@ local function trustedUrl(url)
     return type(url)=="string" and url:sub(1,#BASE)==BASE and not url:find("%.%./")
 end
 
--- Decorative asset requests removed: startup and main background are clean.
+-- Download the optional decorative border asynchronously and cache it locally.
+-- If the executor lacks custom asset support, the launcher works without it.
+local function localAsset(path)
+    local fn = getsynasset or getcustomasset or ((syn and syn.asset) and syn.asset)
+    if type(fn) ~= "function" then return nil end
+    local okAsset, asset = pcall(fn, path)
+    if okAsset and asset then return asset end
+    return nil
+end
+
+local function loadFernBorderAsset()
+    if type(isfile) == "function" then
+        local okFile, exists = pcall(isfile, FERN_BORDER_PATH)
+        if okFile and exists then
+            local cached = localAsset(FERN_BORDER_PATH)
+            if cached then return cached end
+        end
+    end
+    if type(writefile) ~= "function" then return nil end
+    if type(makefolder) == "function" then
+        pcall(makefolder, "PaporotnicHub")
+        pcall(makefolder, "PaporotnicHub/assets")
+    end
+    local okFetch, bytes = pcall(function() return game:HttpGet(FERN_BORDER_URL) end)
+    if not okFetch or type(bytes) ~= "string" or #bytes < 100 then return nil end
+    local okWrite = pcall(writefile, FERN_BORDER_PATH, bytes)
+    if not okWrite then return nil end
+    return localAsset(FERN_BORDER_PATH)
+end
 
 local approvedKey = nil
 
@@ -768,8 +802,23 @@ corner(root,16)
 -- the group itself. Keep the window border fully hidden during the splash.
 local rootStroke=create("UIStroke",{Thickness=1,Color=palette.border,Transparency=1,Enabled=false},root)
 
--- Intentionally no background sprites or moving fern grid.
--- Ambient highlights are added directly to cards via card().
+-- Static fern border: exact 980x310 asset, bottom-aligned, clipped by the
+-- 980x720 rounded launcher. It stays beneath every card/tab, never intercepts input,
+-- and does NOT appear on the loading or key-entry screen.
+local fernBorder=create("ImageLabel",{
+    Name="StaticFernBorder", AnchorPoint=Vector2.new(0,1),
+    Position=UDim2.fromScale(0,1), Size=UDim2.new(1,0,0,310),
+    BackgroundTransparency=1, BorderSizePixel=0, Image="",
+    ImageTransparency=0.52, ScaleType=Enum.ScaleType.Stretch,
+    ZIndex=1, Active=false, Selectable=false
+},root)
+-- No repeating sprites, update loops or diagonal drifting movement.
+task.spawn(function()
+    local asset = loadFernBorderAsset()
+    if alive and fernBorder.Parent and asset then
+        fernBorder.Image=asset
+    end
+end)
 
 local top=create("Frame",{Size=UDim2.new(1,0,0,60),Active=true,BackgroundColor3=palette.panel,BorderSizePixel=0,BackgroundTransparency=0.08},root)
 corner(top,16)
@@ -1132,4 +1181,4 @@ local function playLaunchIntro()
 end
 
 task.spawn(playLaunchIntro)
-print("[Paporotnic Universal Launcher] v0.2.16 | PlaceId="..tostring(game.PlaceId))
+print("[Paporotnic Universal Launcher] v0.2.17 | PlaceId="..tostring(game.PlaceId))
