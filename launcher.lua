@@ -1,5 +1,6 @@
--- PAPOROTNIC HUB | universal launcher prototype v0.2.14
--- Bigger launcher, releases, search, and smoothly drifting fern-sticker background.
+-- PAPOROTNIC HUB | universal launcher v0.2.15
+-- 3-second loading gate, key-only entry, and quiet accent-glow interface.
+-- Based on the user's v0.2.14 launcher; auth API and game module flow preserved.
 
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
@@ -17,12 +18,8 @@ end
 
 local BASE = "https://raw.githubusercontent.com/paporotnicsir/PaporotnicHub/refs/heads/main/"
 local CATALOG_URL = BASE .. "catalog.json"
-local SPLASH_FERN_URL = BASE .. "assets/fern_sticker.png"
-local LOCAL_SPLASH_FERN_PATH = "PaporotnicHub/assets/fern_sticker.png"
-local HUB_FERN_URL = BASE .. "assets/hub_fern_leaf.png"
-local LOCAL_HUB_FERN_PATH = "PaporotnicHub/assets/hub_fern_leaf.png"
 local FALLBACK = {
-    version = "0.2.14 (offline catalog)",
+    version = "0.2.15 (offline catalog)",
     latestVersion = "Paporotnic Hub Core v0.2.8",
     lifetimePrice = "$ ?? / TBA",
     announcement = "Welcome, LIL Paporotnics! The universal hub is online.",
@@ -37,6 +34,9 @@ local FALLBACK = {
             id = "release-020", version = "v0.2.0", name = "Launcher redesign",
             summary = "Larger interface, fern background and a dedicated Releases page.",
             updates = {
+                {version = "v0.2.15", title = "Loading and access gate redesign",
+                  body = "Minimal 3-second loading panel, key-only activation, subtle ambient panel glow and a clean background.",
+                  bodyRu = "Новая трёхсекундная загрузка, отдельное окно ключа, мягкая подсветка панелей и чистый фон."},
                 {version = "v0.2.14", title = "Smaller hub background leaves",
                  body = "Reduced the in-hub fern-leaf size by about 17% without changing the diagonal animation.",
                  bodyRu = "Размер фоновых листьев уменьшен примерно на 17%; диагональная анимация сохранена."},
@@ -122,9 +122,11 @@ local strings = {
         releaseSub="Новости и изменения Paporotnic Hub", totalGames="Игр в каталоге", authState="Статус доступа",
         accessPublic="PUBLIC / TEST", accessGranted="Ключ активирован", accessNeed="Ожидает ключ",
         patches="ПОДОБНОВЛЕНИЙ", expandedHint="Нажми на релиз, чтобы увидеть изменения",
-        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.14 (TEST)",
+        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.15 (TEST)",
         themeHeading="ТЕМА ОФОРМЛЕНИЯ", themeHint="Изменения применяются сразу. Сохранение работает, если исполнитель поддерживает запись файлов.",
-        themeForest="ЛЕСНАЯ", themeOcean="НОЧНОЙ ОКЕАН", themeEmber="ЗАКАТ", themeViolet="ФИОЛЕТОВАЯ", themeActive="ВЫБРАНО"
+        themeForest="ЛЕСНАЯ", themeOcean="НОЧНОЙ ОКЕАН", themeEmber="ЗАКАТ", themeViolet="ФИОЛЕТОВАЯ", themeActive="ВЫБРАНО",
+         gateSubtitle="Для доступа к хабу требуется ключ", gateIdle="Введите ключ для продолжения.",
+         gateProgress="ПОДГОТОВКА ЛАУНЧЕРА", gateLoading="ЗАГРУЗКА", gateReady="ГОТОВО", gateClose="Закрыть лаунчер"
     },
     en = {
         searchHint="Search games...", noSearchResults="No matching games",
@@ -145,9 +147,11 @@ local strings = {
         releaseSub="News and changes for Paporotnic Hub", totalGames="Games in catalog", authState="Access status",
         accessPublic="PUBLIC / TEST", accessGranted="Key activated", accessNeed="Awaiting key",
         patches="PATCHES", expandedHint="Click a release to view its updates",
-        releaseBuild="LAUNCHER BUILD: v0.2.14 (TEST)",
+        releaseBuild="LAUNCHER BUILD: v0.2.15 (TEST)",
         themeHeading="COLOR THEME", themeHint="Themes apply instantly. Saving needs executor file access.",
-        themeForest="FOREST", themeOcean="NIGHT OCEAN", themeEmber="SUNSET", themeViolet="VIOLET", themeActive="ACTIVE"
+        themeForest="FOREST", themeOcean="NIGHT OCEAN", themeEmber="SUNSET", themeViolet="VIOLET", themeActive="ACTIVE",
+         gateSubtitle="An access key is required to continue", gateIdle="Enter your key to continue.",
+         gateProgress="PREPARING LAUNCHER", gateLoading="LOADING", gateReady="READY", gateClose="Close launcher"
     }
 }
 local lang = "en"
@@ -218,6 +222,9 @@ local authenticated = false
 local authMode = "server"  -- fail closed, even with an offline or stale catalog
 local selectedTab = "home"
 local statusText = ""
+local uiPhase = "BOOT" -- BOOT / AUTH / UNLOCKING / MAIN
+local verifyingKey = false
+local authStatusLabel, authSubmitButton, authInput
 local screen, root, content, statusLabel, titleLabel, footerLabel
 
 local function connect(signal, cb)
@@ -292,7 +299,20 @@ local function card(parent, height)
     local x=create("Frame", {Size=UDim2.new(1,-10,0,height), BorderSizePixel=0, BackgroundColor3=palette.panel, BackgroundTransparency=0.05},parent)
     corner(x,12)
     pad(x,16,14)
-    create("UIStroke", {Thickness=1, Color=palette.border, Transparency=0.25}, x)
+    -- A muted highlight rim and a tiny interior light wash. The page stays
+    -- clean and static; no moving fern textures or background particles.
+    create("UIStroke", {Thickness=1.5, Color=palette.highlight, Transparency=0.82}, x)
+    local wash=create("Frame", {
+        Name="AmbientGlow", Position=UDim2.new(0.44,0,0,0), Size=UDim2.new(0.56,0,1,0),
+        BackgroundColor3=palette.highlight, BackgroundTransparency=0.90,
+        BorderSizePixel=0, ZIndex=1
+    },x)
+    corner(wash,12)
+    create("UIGradient", {Transparency=NumberSequence.new({
+        NumberSequenceKeypoint.new(0,1),
+        NumberSequenceKeypoint.new(0.75,0.77),
+        NumberSequenceKeypoint.new(1,0.92)
+    })}, wash)
     return x
 end
 local function clearPage()
@@ -303,6 +323,17 @@ local function info(text, warning)
     if statusLabel then
         statusLabel.Text=statusText
         statusLabel.TextColor3 = warning and palette.alert or palette.highlight
+    end
+    -- Display verification results right beneath the access-key textbox,
+    -- never in a distant footer while the user is at the AUTH gate.
+    if uiPhase=="AUTH" and authStatusLabel and authStatusLabel.Parent then
+        authStatusLabel.Text=statusText
+        authStatusLabel.TextColor3=warning and palette.alert or palette.highlight
+        if authSubmitButton then
+            authSubmitButton.Text=verifyingKey and (lang=="ru" and "ПРОВЕРЯЕМ..." or "VERIFYING...") or T("enter")
+            authSubmitButton.Active=not verifyingKey
+            authSubmitButton.AutoButtonColor=not verifyingKey
+        end
     end
 end
 local function isSupported(gameRow)
@@ -316,46 +347,8 @@ local function trustedUrl(url)
     return type(url)=="string" and url:sub(1,#BASE)==BASE and not url:find("%.%./")
 end
 
-local function getCustomAsset(path)
-    local fn = getsynasset or getcustomasset or ((syn and syn.asset) and syn.asset)
-    if type(fn) == "function" then
-        local ok, asset = pcall(fn, path)
-        if ok then return asset end
-    end
-    return nil
-end
+-- Decorative asset requests removed: startup and main background are clean.
 
-local function ensureAsset(url, localPath)
-    local existing = nil
-    if type(isfile) == "function" and isfile(localPath) then
-        existing = getCustomAsset(localPath)
-        if existing then return existing end
-    end
-    if type(makefolder) == "function" then
-        pcall(makefolder, "PaporotnicHub")
-        pcall(makefolder, "PaporotnicHub/assets")
-    end
-    if type(writefile) == "function" then
-        local okData, data = pcall(function() return game:HttpGet(url) end)
-        if okData and type(data) == "string" and #data > 100 then
-            pcall(writefile, localPath, data)
-            if type(isfile) == "function" and isfile(localPath) then
-                return getCustomAsset(localPath)
-            end
-        end
-    end
-    return nil
-end
-
-local function ensureSplashFernAsset()
-    return ensureAsset(SPLASH_FERN_URL, LOCAL_SPLASH_FERN_PATH)
-end
-
-local function ensureHubFernAsset()
-    return ensureAsset(HUB_FERN_URL, LOCAL_HUB_FERN_PATH)
-end
-
-local verifyingKey = false
 local approvedKey = nil
 
 local function verifyKey(key, onSuccess)
@@ -461,154 +454,7 @@ local function createMagnifier(parent, pos)
     return holder
 end
 
-local function createFernSticker(parent, z, fernAsset)
-    if fernAsset then
-        local img = create("ImageLabel", {
-            Size = UDim2.fromOffset(175, 212),
-            BackgroundTransparency = 1,
-            BorderSizePixel = 0,
-            Image = fernAsset,
-            ScaleType = Enum.ScaleType.Fit,
-            ImageTransparency = 0.40,
-            Visible = false, -- positioned before showing the continuous drift
-            ZIndex = z or 0,
-            Rotation = -22
-        }, parent)
-        return img
-    end
-
-    local holder = create("Frame", {
-        Size = UDim2.fromOffset(175, 212),
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Visible = false,
-        ZIndex = z or 0,
-        Rotation = math.random(-25,25)
-    }, parent)
-
-    local shadow = create("Frame", {
-        Size = UDim2.new(1,0,1,0), BackgroundTransparency = 1, BorderSizePixel = 0,
-        Position = UDim2.fromOffset(2,3), ZIndex = (z or 0)
-    }, holder)
-    local sticker = create("Frame", {
-        Size = UDim2.new(1,0,1,0), BackgroundTransparency = 1, BorderSizePixel = 0,
-        ZIndex = (z or 0)+1
-    }, holder)
-
-    local function leaflet(container, size, pos, rot, color, zIndex)
-        local leaf = create("Frame", {
-            AnchorPoint = Vector2.new(0.5,0.5), Size = size, Position = pos,
-            Rotation = rot, BackgroundColor3 = color, BorderSizePixel = 0, ZIndex = zIndex
-        }, container)
-        corner(leaf, 99)
-        create("UIStroke", {Thickness=2, Color=Color3.fromRGB(255,255,255), Transparency=0.03}, leaf)
-        return leaf
-    end
-    local function stem(container, color, zIndex)
-        local line = create("Frame", {
-            AnchorPoint = Vector2.new(0.5,0), Position = UDim2.new(0.5,0,0.12,0), Size = UDim2.new(0,5,0.72,0),
-            BackgroundColor3 = color, BorderSizePixel = 0, Rotation = -8, ZIndex = zIndex
-        }, container)
-        corner(line, 99)
-        create("UIStroke", {Thickness=2, Color=Color3.fromRGB(255,255,255), Transparency=0.04}, line)
-    end
-
-    stem(shadow, palette.fernShadow, (z or 0))
-    stem(sticker, (math.random() > 0.5) and palette.fern or palette.fern2, (z or 0)+1)
-
-    for i = 1, 8 do
-        local y = 0.16 + (i-1) * 0.082
-        local w = 0.16 + (8-i) * 0.010
-        local h = 0.08 + (8-i) * 0.004
-        leaflet(shadow, UDim2.new(w,0,h,0), UDim2.new(0.36,0,y,0), -38, palette.fernShadow, (z or 0))
-        leaflet(shadow, UDim2.new(w,0,h,0), UDim2.new(0.66,0,y+0.01,0), 36, palette.fernShadow, (z or 0))
-        leaflet(sticker, UDim2.new(w,0,h,0), UDim2.new(0.38,0,y,0), -38, (i%2==0) and palette.fern or palette.fern2, (z or 0)+1)
-        leaflet(sticker, UDim2.new(w,0,h,0), UDim2.new(0.64,0,y+0.01,0), 36, (i%2==1) and palette.fern or palette.fern2, (z or 0)+1)
-    end
-    local tip = create("Frame", {
-        AnchorPoint = Vector2.new(0.5,0.5), Position = UDim2.new(0.52,0,0.08,0), Size = UDim2.new(0.16,0,0.10,0),
-        Rotation = -8, BackgroundColor3 = palette.fern2, BorderSizePixel = 0, ZIndex = (z or 0)+1
-    }, sticker)
-    corner(tip, 99)
-    create("UIStroke", {Thickness=2, Color=Color3.fromRGB(255,255,255), Transparency=0.04}, tip)
-
-    return holder
-end
-
--- Continuously drifting diagonal lattice. Its exact starting grid is the
--- previous 5x4 layout; all ferns share the same down-right translation.
--- Edge copies make the pattern seamless when a leaf crosses any side.
--- No random positions, staggered spawns, or independent tweens.
-local function startDiagonalFernField(parent, asset)
-    if not asset then
-        warn("[Paporotnic] Missing hub fern asset. Upload assets/hub_fern_leaf.png to GitHub.")
-        return
-    end
-
-    local RunService = game:GetService("RunService")
-    local columns, rows = 5, 4
-    local speedX, speedY = 16, 24 -- pixels/second: gentle downward-right drift
-    local marginX, marginY = 155, 170 -- larger than rotated sprite half-bounds
-    local offsetX, offsetY = 0, 0
-    local ferns = {}
-
-    for row = 0, rows - 1 do
-        for column = 0, columns - 1 do
-            local copies = {}
-            for i = 1, 4 do
-                local fern = createFernSticker(parent, 0, asset)
-                fern.AnchorPoint = Vector2.new(0.5, 0.5)
-                fern.Rotation = -22
-                fern.ImageTransparency = 0.48
-                fern.Visible = false
-                copies[i] = fern
-            end
-            ferns[#ferns + 1] = {row = row, column = column, copies = copies}
-        end
-    end
-
-    local function place(fern, x, y, visible)
-        if visible then
-            fern.Position = UDim2.fromOffset(x, y)
-        end
-        fern.Visible = visible
-    end
-
-    local function positionAll()
-        local width, height = parent.AbsoluteSize.X, parent.AbsoluteSize.Y
-        if width < 1 or height < 1 then return end
-        for _, entry in ipairs(ferns) do
-            -- Preserve the original alternating-row diagonal grid precisely.
-            local x = ((((entry.column + 0.5 + (entry.row % 2) * 0.5) / columns) * width) + offsetX) % width
-            local y = ((((entry.row + 0.5) / rows) * height) + offsetY) % height
-
-            -- Show mirror copies only near an edge, so passing the opposite
-            -- edge never creates a visible jump or an empty border.
-            local ghostX, ghostY = nil, nil
-            if x < marginX then ghostX = x + width
-            elseif x > width - marginX then ghostX = x - width end
-            if y < marginY then ghostY = y + height
-            elseif y > height - marginY then ghostY = y - height end
-
-            local copies = entry.copies
-            place(copies[1], x, y, true)
-            place(copies[2], ghostX or 0, y, ghostX ~= nil)
-            place(copies[3], x, ghostY or 0, ghostY ~= nil)
-            place(copies[4], ghostX or 0, ghostY or 0, ghostX ~= nil and ghostY ~= nil)
-        end
-    end
-
-    positionAll() -- fill the whole canvas before the intro reveals the hub
-    connect(RunService.RenderStepped, function(dt)
-        if not alive or not parent.Parent then return end
-        local width, height = parent.AbsoluteSize.X, parent.AbsoluteSize.Y
-        if width < 1 or height < 1 then return end
-        dt = math.min(dt, 0.1)
-        offsetX = (offsetX + speedX * dt) % width
-        offsetY = (offsetY + speedY * dt) % height
-        positionAll()
-    end)
-end
+-- Static background; old diagonal fern field removed.
 
 function render() end
 
@@ -632,20 +478,8 @@ local function renderHome()
     local accessLbl = txt(stats, T("authState")..": "..access, 13, authenticated and palette.highlight or palette.muted, 24)
     accessLbl.Position = UDim2.new(0.48,0,0,0)
 
-    local keyCard=card(sc,112)
-    txt(keyCard,T("login"),12,palette.muted,20).Position=UDim2.fromOffset(0,0)
-    local actions=create("Frame",{Position=UDim2.fromOffset(0,28),Size=UDim2.new(1,0,0,38),BackgroundTransparency=1},keyCard)
-    local keyBox=create("TextBox",{
-        Size=UDim2.new(1,-170,0,38),Position=UDim2.fromOffset(0,0), ClearTextOnFocus=false,Text="",
-        PlaceholderText=T("key"), Font=Enum.Font.Gotham,TextSize=14,TextColor3=palette.text,
-        PlaceholderColor3=palette.muted,BackgroundColor3=palette.card,BorderSizePixel=0
-    },actions)
-    corner(keyBox,8)
-    local submit=button(actions,T("enter"),160,38,function() verifyKey(keyBox.Text) end,true)
-    submit.Position=UDim2.new(1,-160,0,0)
-    local message=authMode=="public" and T("noBackend") or T("secure")
-    local m=txt(keyCard,message,12,palette.muted,28)
-    m.Position=UDim2.fromOffset(0,72)
+    -- Key entry happens exclusively in the small AUTH gate before this page
+    -- becomes visible. No second activation box in Home.
 
     local infoRow=create("Frame",{Size=UDim2.new(1,-10,0,150), BackgroundTransparency=1}, sc)
     local versionCard=card(infoRow,150)
@@ -923,16 +757,16 @@ function render()
 end
 
 screen=create("ScreenGui",{Name="PaporotnicUniversalLauncher",ResetOnSpawn=false,IgnoreGuiInset=true,ZIndexBehavior=Enum.ZIndexBehavior.Sibling,DisplayOrder=1000},playerGui)
-root=create("CanvasGroup",{Position=UDim2.new(.5,-490,.5,-360),Size=UDim2.fromOffset(980,720),Active=true,BackgroundColor3=palette.background,BorderSizePixel=0,ClipsDescendants=true,GroupTransparency=1},screen)
+-- A hidden CanvasGroup alone can sometimes leave children interactive.
+-- Keep the full launcher genuinely invisible until the API confirms a key.
+root=create("CanvasGroup",{Position=UDim2.new(.5,-490,.5,-360),Size=UDim2.fromOffset(980,720),Active=true,Visible=false,BackgroundColor3=palette.background,BorderSizePixel=0,ClipsDescendants=true,GroupTransparency=1},screen)
 corner(root,16)
 -- CanvasGroup.GroupTransparency does not reliably hide a UIStroke attached to
 -- the group itself. Keep the window border fully hidden during the splash.
 local rootStroke=create("UIStroke",{Thickness=1,Color=palette.border,Transparency=1,Enabled=false},root)
 
-local bg=create("Frame",{Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,ClipsDescendants=true},root)
-local splashFernAsset = ensureSplashFernAsset()
-local hubFernAsset = ensureHubFernAsset()
-startDiagonalFernField(bg, hubFernAsset or splashFernAsset)
+-- Intentionally no background sprites or moving fern grid.
+-- Ambient highlights are added directly to cards via card().
 
 local top=create("Frame",{Size=UDim2.new(1,0,0,60),Active=true,BackgroundColor3=palette.panel,BorderSizePixel=0,BackgroundTransparency=0.08},root)
 corner(top,16)
@@ -1000,14 +834,14 @@ global.__PaporotnicLauncherStop=stop
 render()
 if not catalogOk then info(T("offline"),true) end
 
--- Intro: a plain Frame for the backdrop. A CanvasGroup could composite the
--- whole splash into an opaque-looking dark rectangle in some Roblox clients.
--- BlurEffect softens only the game world; the fern and title stay sharp.
+-- Intro and login share a single fixed-size panel. The existing screen blur
+-- remains until the key has been verified; the full hub is inaccessible before then.
 local function playLaunchIntro()
     local overlay=create("Frame",{
-        Size=UDim2.fromScale(1,1), Position=UDim2.fromScale(0,0),
-        BackgroundColor3=palette.background, BackgroundTransparency=0.62,
-        BorderSizePixel=0, Active=true, ZIndex=100
+        Name="PaporotnicGateOverlay", Size=UDim2.fromScale(1,1),
+        Position=UDim2.fromScale(0,0), BackgroundColor3=palette.background,
+        BackgroundTransparency=0.57, BorderSizePixel=0,
+        Active=true, ZIndex=100
     },screen)
 
     local Lighting=game:GetService("Lighting")
@@ -1021,63 +855,211 @@ local function playLaunchIntro()
         Size=9
     }):Play()
 
-    local fern=create("ImageLabel",{
-        Size=UDim2.fromOffset(175,224),Position=UDim2.new(0.5,0,0.47,-45),
-        AnchorPoint=Vector2.new(0.5,0.5),BackgroundTransparency=1,
-        Image=splashFernAsset or "",ScaleType=Enum.ScaleType.Fit,
-        ImageTransparency=1,Rotation=-14,ZIndex=102
+    local glow=create("Frame",{
+        Name="GateAmbientGlow", AnchorPoint=Vector2.new(0.5,0.5),
+        Position=UDim2.fromScale(0.5,0.5), Size=UDim2.fromOffset(500,330),
+        BackgroundColor3=palette.highlight,BackgroundTransparency=0.975,
+        BorderSizePixel=0,ZIndex=101
     },overlay)
-    local title=txt(overlay,"PAPOROTNIC HUB",30,palette.highlight,48,Enum.TextXAlignment.Center)
-    title.AnchorPoint=Vector2.new(0.5,0.5)
-    title.Position=UDim2.new(0.5,0,0.47,150)
-    title.Size=UDim2.fromOffset(520,48)
-    title.Font=Enum.Font.GothamBold
-    title.MaxVisibleGraphemes=0
-    title.TextTransparency=0
-    title.ZIndex=102
+    corner(glow,22)
+    create("UIStroke",{Thickness=8,Color=palette.highlight,Transparency=0.965},glow)
 
-    local bloom=TweenService:Create(fern,TweenInfo.new(0.75,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),{
-        Size=UDim2.fromOffset(250,320),ImageTransparency=0.07,Rotation=-22
-    })
-    bloom:Play()
-    bloom.Completed:Wait()
-    if not alive or not overlay.Parent then return end
-    for letter=1,#"PAPOROTNIC HUB" do
-        title.MaxVisibleGraphemes=letter
-        task.wait(0.025)
-        if not alive or not overlay.Parent then return end
-    end
-    task.wait(0.36)
-    if not alive or not overlay.Parent then return end
+    local gate=create("Frame",{
+        Name="AccessGate", AnchorPoint=Vector2.new(0.5,0.5),
+        Position=UDim2.fromScale(0.5,0.5), Size=UDim2.fromOffset(480,310),
+        BackgroundColor3=palette.panel, BackgroundTransparency=0.025,
+        BorderSizePixel=0,ZIndex=102
+    },overlay)
+    corner(gate,15)
+    create("UIStroke",{Thickness=1.5,Color=palette.highlight,Transparency=0.62},gate)
 
-    local duration=TweenInfo.new(0.85,Enum.EasingStyle.Quart,Enum.EasingDirection.InOut)
-    local backdropFade=TweenService:Create(overlay,duration,{BackgroundTransparency=1})
-    local fernFade=TweenService:Create(fern,duration,{ImageTransparency=1})
-    local titleFade=TweenService:Create(title,duration,{TextTransparency=1})
-    local blurFade=TweenService:Create(blur,duration,{Size=0})
-    local hubFade=TweenService:Create(root,TweenInfo.new(0.90,Enum.EasingStyle.Quart,Enum.EasingDirection.InOut),{
-        GroupTransparency=0
-    })
-    backdropFade:Play()
-    fernFade:Play()
-    titleFade:Play()
-    blurFade:Play()
-    hubFade:Play()
-    hubFade.Completed:Wait()
-    if alive and root.Parent then
+    local miniAccent=create("Frame",{
+        Position=UDim2.fromOffset(28,28),Size=UDim2.fromOffset(34,3),
+        BackgroundColor3=palette.highlight,BorderSizePixel=0,ZIndex=103
+    },gate)
+    corner(miniAccent,3)
+
+    local bootBody=create("CanvasGroup",{
+        Name="BootContent", Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
+        BorderSizePixel=0,GroupTransparency=0,ZIndex=104
+    },gate)
+    local authBody=create("CanvasGroup",{
+        Name="AuthContent", Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
+        BorderSizePixel=0,GroupTransparency=1,Visible=false,ZIndex=104
+    },gate)
+
+    local bootTitle=txt(bootBody,"PAPOROTNIC HUB",32,palette.text,50)
+    bootTitle.Font=Enum.Font.GothamBold
+    bootTitle.Position=UDim2.fromOffset(28,63)
+    bootTitle.Size=UDim2.new(1,-56,0,50)
+    local bootSub=txt(bootBody,T("gateProgress"),12,palette.muted,22)
+    bootSub.Position=UDim2.fromOffset(29,118)
+    bootSub.Size=UDim2.new(1,-58,0,22)
+
+    local progressTrack=create("Frame",{
+        Position=UDim2.fromOffset(29,189),Size=UDim2.new(1,-58,0,11),
+        BackgroundColor3=palette.card,BorderSizePixel=0,ClipsDescendants=true
+    },bootBody)
+    corner(progressTrack,8)
+    create("UIStroke",{Thickness=1,Color=palette.border,Transparency=0.55},progressTrack)
+    local progressFill=create("Frame",{
+        Name="ProgressFill",Size=UDim2.fromScale(0,1),
+        BackgroundColor3=palette.highlight,BorderSizePixel=0
+    },progressTrack)
+    corner(progressFill,8)
+    create("UIGradient",{Color=ColorSequence.new({
+        ColorSequenceKeypoint.new(0,palette.highlight:Lerp(palette.text,0.28)),
+        ColorSequenceKeypoint.new(1,palette.highlight)
+    })},progressFill)
+
+    local loadingLabel=txt(bootBody,T("gateLoading"),12,palette.muted,25)
+    loadingLabel.Position=UDim2.fromOffset(29,215)
+    loadingLabel.Size=UDim2.new(0.72,0,0,25)
+    local progressLabel=txt(bootBody,"0%",15,palette.highlight,25,Enum.TextXAlignment.Right)
+    progressLabel.Font=Enum.Font.GothamBold
+    progressLabel.Position=UDim2.new(1,-126,0,215)
+    progressLabel.Size=UDim2.fromOffset(97,25)
+    local bootFoot=txt(bootBody,"PAPOROTNIC  /  ACCESS CONTROL",10,palette.muted,20)
+    bootFoot.Position=UDim2.fromOffset(29,268)
+    bootFoot.Size=UDim2.new(1,-58,0,20)
+
+    local authTitle=txt(authBody,"PAPOROTNIC HUB",27,palette.text,42)
+    authTitle.Font=Enum.Font.GothamBold
+    authTitle.Position=UDim2.fromOffset(28,55)
+    authTitle.Size=UDim2.new(1,-56,0,42)
+    local authSub=txt(authBody,T("gateSubtitle"),13,palette.muted,24)
+    authSub.Position=UDim2.fromOffset(29,94)
+    authSub.Size=UDim2.new(1,-58,0,24)
+
+    authInput=create("TextBox",{
+        Name="AccessKeyInput",Size=UDim2.new(1,-58,0,42),
+        Position=UDim2.fromOffset(29,132),BackgroundColor3=palette.card,
+        BackgroundTransparency=0.05,BorderSizePixel=0,ClearTextOnFocus=false,
+        Text="",PlaceholderText=T("key"),Font=Enum.Font.Gotham,
+        TextSize=15,TextColor3=palette.text,PlaceholderColor3=palette.muted,
+        TextXAlignment=Enum.TextXAlignment.Left
+    },authBody)
+    corner(authInput,8)
+    pad(authInput,13,0)
+    create("UIStroke",{Thickness=1,Color=palette.border,Transparency=0.28},authInput)
+
+    authStatusLabel=txt(authBody,T("gateIdle"),12,palette.muted,22)
+    authStatusLabel.Name="KeyStatus"
+    authStatusLabel.Position=UDim2.fromOffset(29,179)
+    authStatusLabel.Size=UDim2.new(1,-58,0,22)
+    authStatusLabel.TextWrapped=false
+
+    authSubmitButton=button(authBody,T("enter"),422,43,nil,true)
+    authSubmitButton.Name="ActivateKeyButton"
+    authSubmitButton.Position=UDim2.fromOffset(29,218)
+    local authFoot=txt(authBody,"PAPOROTNIC  /  SECURE ACCESS",10,palette.muted,20)
+    authFoot.Position=UDim2.fromOffset(29,274)
+    authFoot.Size=UDim2.new(1,-58,0,20)
+
+    local close=button(gate,"X",29,29,function() stop() end,false)
+    close.Name="CloseGate"
+    close.Position=UDim2.new(1,-47,0,18)
+    close.TextSize=13
+    close.ZIndex=110
+
+    local function revealMain()
+        if not alive or uiPhase~="UNLOCKING" or not overlay.Parent then return end
+        uiPhase="MAIN"
+        root.Visible=true
+        -- Keep the main window at its original 980 x 720 size, but reveal it
+        -- only after successful server authorization.
+        local t=TweenInfo.new(0.70,Enum.EasingStyle.Quart,Enum.EasingDirection.Out)
+        local mainFade=TweenService:Create(root,t,{GroupTransparency=0})
+        local backdropFade=TweenService:Create(overlay,t,{BackgroundTransparency=1})
+        local gateFade=TweenService:Create(gate,t,{BackgroundTransparency=1})
+        local bootOrAuthFade=TweenService:Create(authBody,t,{GroupTransparency=1})
+        local glowFade=TweenService:Create(glow,t,{BackgroundTransparency=1})
+        local blurFade=TweenService:Create(blur,t,{Size=0})
+        mainFade:Play()
+        backdropFade:Play()
+        gateFade:Play()
+        bootOrAuthFade:Play()
+        glowFade:Play()
+        blurFade:Play()
+        mainFade.Completed:Wait()
+        if not alive or not root.Parent then return end
         root.GroupTransparency=0
-        -- Only show the outline after the entire splash/reveal has finished.
-        -- This prevents the thin theme-colored rectangle appearing early.
         rootStroke.Enabled=true
         TweenService:Create(rootStroke,TweenInfo.new(0.24,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{
             Transparency=0
         }):Play()
+        if overlay.Parent then overlay:Destroy() end
+        authStatusLabel=nil
+        authSubmitButton=nil
+        authInput=nil
+        if introBlur==blur then
+            blur:Destroy()
+            introBlur=nil
+        end
     end
-    if overlay.Parent then overlay:Destroy() end
-    if introBlur == blur then
-        blur:Destroy()
-        introBlur = nil
+
+    local function submitKey()
+        if not alive or uiPhase~="AUTH" or verifyingKey then return end
+        verifyKey(authInput.Text,function()
+            if not alive or uiPhase~="AUTH" then return end
+            uiPhase="UNLOCKING"
+            authSubmitButton.Text=T("gateReady")
+            task.delay(0.42,function()
+                if alive then revealMain() end
+            end)
+        end)
+    end
+    connect(authSubmitButton.MouseButton1Click,submitKey)
+    connect(authInput.FocusLost,function(enterPressed)
+        if enterPressed then submitKey() end
+    end)
+    connect(authInput:GetPropertyChangedSignal("Text"),function()
+        if uiPhase=="AUTH" and not verifyingKey then
+            authStatusLabel.Text=T("gateIdle")
+            authStatusLabel.TextColor3=palette.muted
+        end
+    end)
+
+    -- A genuine 0→100 counter with a 3.15-second linear animation. There is
+    -- no progress-jumping or early reveal on fast clients.
+    local counter=Instance.new("NumberValue")
+    counter.Name="PaporotnicBootProgress"
+    counter.Value=0
+    counter.Parent=overlay
+    connect(counter:GetPropertyChangedSignal("Value"),function()
+        if not alive or not progressFill.Parent then return end
+        local fraction=math.clamp(counter.Value/100,0,1)
+        progressFill.Size=UDim2.new(fraction,0,1,0)
+        progressLabel.Text=string.format("%d%%",math.floor(counter.Value+0.5))
+    end)
+    local counterTween=TweenService:Create(counter,TweenInfo.new(3.15,Enum.EasingStyle.Linear),{
+        Value=100
+    })
+    counterTween:Play()
+    counterTween.Completed:Wait()
+    if not alive or not overlay.Parent then return end
+    progressFill.Size=UDim2.fromScale(1,1)
+    progressLabel.Text="100%"
+    loadingLabel.Text=T("gateReady")
+    counter:Destroy()
+
+    task.wait(0.22)
+    if not alive or not overlay.Parent then return end
+    authBody.Visible=true
+    local transition=TweenInfo.new(0.22,Enum.EasingStyle.Quad,Enum.EasingDirection.Out)
+    TweenService:Create(bootBody,transition,{GroupTransparency=1}):Play()
+    local authFade=TweenService:Create(authBody,transition,{GroupTransparency=0})
+    authFade:Play()
+    authFade.Completed:Wait()
+    if not alive or not overlay.Parent then return end
+    bootBody.Visible=false
+    uiPhase="AUTH"
+    if not catalogOk then
+        info(T("authNeedServer"),true)
+    else
+        authStatusLabel.Text=T("gateIdle")
     end
 end
+
 task.spawn(playLaunchIntro)
-print("[Paporotnic Universal Launcher] v0.2.12 | PlaceId="..tostring(game.PlaceId))
+print("[Paporotnic Universal Launcher] v0.2.15 | PlaceId="..tostring(game.PlaceId))
