@@ -1,4 +1,4 @@
--- PAPOROTNIC HUB | universal launcher v0.2.15
+-- PAPOROTNIC HUB | universal launcher v0.2.16
 -- 3-second loading gate, key-only entry, and quiet accent-glow interface.
 -- Based on the user's v0.2.14 launcher; auth API and game module flow preserved.
 
@@ -19,7 +19,7 @@ end
 local BASE = "https://raw.githubusercontent.com/paporotnicsir/PaporotnicHub/refs/heads/main/"
 local CATALOG_URL = BASE .. "catalog.json"
 local FALLBACK = {
-    version = "0.2.15 (offline catalog)",
+    version = "0.2.16 (offline catalog)",
     latestVersion = "Paporotnic Hub Core v0.2.8",
     lifetimePrice = "$ ?? / TBA",
     announcement = "Welcome, LIL Paporotnics! The universal hub is online.",
@@ -34,6 +34,9 @@ local FALLBACK = {
             id = "release-020", version = "v0.2.0", name = "Launcher redesign",
             summary = "Larger interface, fern background and a dedicated Releases page.",
             updates = {
+                {version = "v0.2.16", title = "Key options preview",
+                  body = "Added yellow Get Key and gently shimmering green Lifetime buttons below the key activation field.",
+                  bodyRu = "Добавлены жёлтая кнопка Get Key и мягко переливающаяся зелёная Lifetime под активацией ключа."},
                 {version = "v0.2.15", title = "Loading and access gate redesign",
                   body = "Minimal 3-second loading panel, key-only activation, subtle ambient panel glow and a clean background.",
                   bodyRu = "Новая трёхсекундная загрузка, отдельное окно ключа, мягкая подсветка панелей и чистый фон."},
@@ -122,7 +125,7 @@ local strings = {
         releaseSub="Новости и изменения Paporotnic Hub", totalGames="Игр в каталоге", authState="Статус доступа",
         accessPublic="PUBLIC / TEST", accessGranted="Ключ активирован", accessNeed="Ожидает ключ",
         patches="ПОДОБНОВЛЕНИЙ", expandedHint="Нажми на релиз, чтобы увидеть изменения",
-        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.15 (TEST)",
+        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.16 (TEST)",
         themeHeading="ТЕМА ОФОРМЛЕНИЯ", themeHint="Изменения применяются сразу. Сохранение работает, если исполнитель поддерживает запись файлов.",
         themeForest="ЛЕСНАЯ", themeOcean="НОЧНОЙ ОКЕАН", themeEmber="ЗАКАТ", themeViolet="ФИОЛЕТОВАЯ", themeActive="ВЫБРАНО",
          gateSubtitle="Для доступа к хабу требуется ключ", gateIdle="Введите ключ для продолжения.",
@@ -147,7 +150,7 @@ local strings = {
         releaseSub="News and changes for Paporotnic Hub", totalGames="Games in catalog", authState="Access status",
         accessPublic="PUBLIC / TEST", accessGranted="Key activated", accessNeed="Awaiting key",
         patches="PATCHES", expandedHint="Click a release to view its updates",
-        releaseBuild="LAUNCHER BUILD: v0.2.15 (TEST)",
+        releaseBuild="LAUNCHER BUILD: v0.2.16 (TEST)",
         themeHeading="COLOR THEME", themeHint="Themes apply instantly. Saving needs executor file access.",
         themeForest="FOREST", themeOcean="NIGHT OCEAN", themeEmber="SUNSET", themeViolet="VIOLET", themeActive="ACTIVE",
          gateSubtitle="An access key is required to continue", gateIdle="Enter your key to continue.",
@@ -857,7 +860,7 @@ local function playLaunchIntro()
 
     local glow=create("Frame",{
         Name="GateAmbientGlow", AnchorPoint=Vector2.new(0.5,0.5),
-        Position=UDim2.fromScale(0.5,0.5), Size=UDim2.fromOffset(500,330),
+        Position=UDim2.fromScale(0.5,0.5), Size=UDim2.fromOffset(514,394),
         BackgroundColor3=palette.highlight,BackgroundTransparency=0.975,
         BorderSizePixel=0,ZIndex=101
     },overlay)
@@ -866,7 +869,7 @@ local function playLaunchIntro()
 
     local gate=create("Frame",{
         Name="AccessGate", AnchorPoint=Vector2.new(0.5,0.5),
-        Position=UDim2.fromScale(0.5,0.5), Size=UDim2.fromOffset(480,310),
+        Position=UDim2.fromScale(0.5,0.5), Size=UDim2.fromOffset(480,370),
         BackgroundColor3=palette.panel, BackgroundTransparency=0.025,
         BorderSizePixel=0,ZIndex=102
     },overlay)
@@ -890,14 +893,14 @@ local function playLaunchIntro()
 
     local bootTitle=txt(bootBody,"PAPOROTNIC HUB",32,palette.text,50)
     bootTitle.Font=Enum.Font.GothamBold
-    bootTitle.Position=UDim2.fromOffset(28,63)
+    bootTitle.Position=UDim2.fromOffset(28,89)
     bootTitle.Size=UDim2.new(1,-56,0,50)
     local bootSub=txt(bootBody,T("gateProgress"),12,palette.muted,22)
-    bootSub.Position=UDim2.fromOffset(29,118)
+    bootSub.Position=UDim2.fromOffset(29,144)
     bootSub.Size=UDim2.new(1,-58,0,22)
 
     local progressTrack=create("Frame",{
-        Position=UDim2.fromOffset(29,189),Size=UDim2.new(1,-58,0,11),
+        Position=UDim2.fromOffset(29,215),Size=UDim2.new(1,-58,0,11),
         BackgroundColor3=palette.card,BorderSizePixel=0,ClipsDescendants=true
     },bootBody)
     corner(progressTrack,8)
@@ -913,14 +916,14 @@ local function playLaunchIntro()
     })},progressFill)
 
     local loadingLabel=txt(bootBody,T("gateLoading"),12,palette.muted,25)
-    loadingLabel.Position=UDim2.fromOffset(29,215)
+    loadingLabel.Position=UDim2.fromOffset(29,241)
     loadingLabel.Size=UDim2.new(0.72,0,0,25)
     local progressLabel=txt(bootBody,"0%",15,palette.highlight,25,Enum.TextXAlignment.Right)
     progressLabel.Font=Enum.Font.GothamBold
-    progressLabel.Position=UDim2.new(1,-126,0,215)
+    progressLabel.Position=UDim2.new(1,-126,0,241)
     progressLabel.Size=UDim2.fromOffset(97,25)
     local bootFoot=txt(bootBody,"PAPOROTNIC  /  ACCESS CONTROL",10,palette.muted,20)
-    bootFoot.Position=UDim2.fromOffset(29,268)
+    bootFoot.Position=UDim2.fromOffset(29,335)
     bootFoot.Size=UDim2.new(1,-58,0,20)
 
     local authTitle=txt(authBody,"PAPOROTNIC HUB",27,palette.text,42)
@@ -952,8 +955,75 @@ local function playLaunchIntro()
     authSubmitButton=button(authBody,T("enter"),422,43,nil,true)
     authSubmitButton.Name="ActivateKeyButton"
     authSubmitButton.Position=UDim2.fromOffset(29,218)
+
+    -- Reserved actions for upcoming key distribution / lifetime purchase.
+    -- These are visual-only placeholders: no URL, payment or key issuance yet.
+    local keyActions=create("Frame",{
+        Name="KeyOptions", Position=UDim2.fromOffset(29,276),
+        Size=UDim2.fromOffset(422,40), BackgroundTransparency=1,
+        BorderSizePixel=0
+    },authBody)
+
+    local getKeyButton=create("TextButton",{
+        Name="GetKeyButton", Position=UDim2.fromOffset(0,0),
+        Size=UDim2.fromOffset(205,40), BackgroundColor3=Color3.fromRGB(245,195,65),
+        BorderSizePixel=0, Text="",
+        AutoButtonColor=false, Active=false, Selectable=false
+    },keyActions)
+    corner(getKeyButton,9)
+    create("TextLabel",{
+        Name="GetKeyLabel", Size=UDim2.fromScale(1,1),
+        BackgroundTransparency=1, Text="GET KEY",
+        Font=Enum.Font.GothamBold, TextSize=13,
+        TextColor3=Color3.fromRGB(49,34,9)
+    },getKeyButton)
+    create("UIGradient",{
+        Rotation=10,
+        Color=ColorSequence.new({
+            ColorSequenceKeypoint.new(0,Color3.fromRGB(255,230,132)),
+            ColorSequenceKeypoint.new(1,Color3.fromRGB(239,169,43))
+        })
+    },getKeyButton)
+    create("UIStroke",{
+        Thickness=1.4, Color=Color3.fromRGB(255,223,116), Transparency=0.36
+    },getKeyButton)
+
+    local lifetimeButton=create("TextButton",{
+        Name="LifetimeButton", Position=UDim2.fromOffset(217,0),
+        Size=UDim2.fromOffset(205,40), BackgroundColor3=Color3.fromRGB(24,103,69),
+        BorderSizePixel=0, Text="",
+        AutoButtonColor=false, Active=false, Selectable=false
+    },keyActions)
+    corner(lifetimeButton,9)
+    create("TextLabel",{
+        Name="LifetimeLabel", Size=UDim2.fromScale(1,1),
+        BackgroundTransparency=1, Text="LIFETIME",
+        Font=Enum.Font.GothamBold, TextSize=13,
+        TextColor3=Color3.fromRGB(241,255,246)
+    },lifetimeButton)
+    local lifetimeGradient=create("UIGradient",{
+        Offset=Vector2.new(-0.35,0),
+        Color=ColorSequence.new({
+            ColorSequenceKeypoint.new(0,Color3.fromRGB(18,80,57)),
+            ColorSequenceKeypoint.new(0.35,Color3.fromRGB(35,139,97)),
+            ColorSequenceKeypoint.new(0.5,Color3.fromRGB(95,209,148)),
+            ColorSequenceKeypoint.new(0.65,Color3.fromRGB(35,139,97)),
+            ColorSequenceKeypoint.new(1,Color3.fromRGB(18,80,57))
+        })
+    },lifetimeButton)
+    local lifetimeGlow=create("UIStroke",{
+        Thickness=1.8, Color=Color3.fromRGB(98,238,163), Transparency=0.55
+    },lifetimeButton)
+    -- Soft emerald shimmer, deliberately subtle and never flashing.
+    TweenService:Create(lifetimeGradient,
+        TweenInfo.new(3.6,Enum.EasingStyle.Sine,Enum.EasingDirection.InOut,-1,true),
+        {Offset=Vector2.new(0.35,0)}):Play()
+    TweenService:Create(lifetimeGlow,
+        TweenInfo.new(2.4,Enum.EasingStyle.Sine,Enum.EasingDirection.InOut,-1,true),
+        {Transparency=0.20,Thickness=2.3}):Play()
+
     local authFoot=txt(authBody,"PAPOROTNIC  /  SECURE ACCESS",10,palette.muted,20)
-    authFoot.Position=UDim2.fromOffset(29,274)
+    authFoot.Position=UDim2.fromOffset(29,336)
     authFoot.Size=UDim2.new(1,-58,0,20)
 
     local close=button(gate,"X",29,29,function() stop() end,false)
@@ -1062,4 +1132,4 @@ local function playLaunchIntro()
 end
 
 task.spawn(playLaunchIntro)
-print("[Paporotnic Universal Launcher] v0.2.15 | PlaceId="..tostring(game.PlaceId))
+print("[Paporotnic Universal Launcher] v0.2.16 | PlaceId="..tostring(game.PlaceId))
