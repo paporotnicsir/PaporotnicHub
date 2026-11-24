@@ -5,7 +5,7 @@
   "announcement": "Первый модуль: Disassemble Car Tycoon. Новые игры скоро.",
   "auth": {
     "mode": "server",
-    "verifyUrl": "https://invite-judge-offer-capacity.trycloudflare.com/v1/verify"
+    "verifyUrl": "https://paporotnic.duckdns.org/v1/verify"
   },
   "games": [
     {
@@ -22,3 +22,4 @@
     }
   ]
 }
+  
