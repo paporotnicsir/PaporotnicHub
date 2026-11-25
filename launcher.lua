@@ -1,4 +1,4 @@
--- PAPOROTNIC HUB | universal launcher v0.2.32
+-- PAPOROTNIC HUB | universal launcher v0.2.33
 -- 3-second loading gate, key-only entry, and quiet accent-glow interface.
 -- Based on the user's v0.2.14 launcher; auth API and game module flow preserved.
 
@@ -60,7 +60,7 @@ local function gameIconContent(item)
 end
 
 local FALLBACK = {
-    version = "0.2.32 (offline catalog)",
+    version = "0.2.33 (offline catalog)",
     latestVersion = "Paporotnic Hub Core v0.2.8",
     lifetimePrice = "$ ?? / TBA",
     announcement = "Welcome, LIL Paporotnics! The universal hub is online.",
@@ -75,6 +75,9 @@ local FALLBACK = {
             id = "release-020", version = "v0.2.0", name = "Launcher redesign",
             summary = "Larger interface, fern background and a dedicated Releases page.",
             updates = {
+                {version = "v0.2.33", title = "Sidebar opacity · clean card edges",
+                  body = "Optional translucent sidebar, live theme colors for quick actions and avatar ring, 0.2.31 art alignment restored and highlighted outlines removed.",
+                  bodyRu = "Полупрозрачная боковая панель, корректные цвета кнопок и аватара, оформление картинок v0.2.31 без светящихся рамок."},
                 {version = "v0.2.32", title = "Panel color hotfix · precise artwork corners",
                   body = "Live panel colors without Settings scroll resets, aligned game/IY artwork and preserved settings position.",
                   bodyRu = "Цвет панелей меняется без сброса прокрутки Settings; выровнены изображения игр и Infinite Yield."},
@@ -250,7 +253,7 @@ local strings = {
         releaseSub="Новости и изменения Paporotnic Hub", totalGames="Игр в каталоге", authState="Статус доступа",
         accessPublic="PUBLIC / TEST", accessGranted="Ключ активирован", accessNeed="Ожидает ключ",
         patches="ПОДОБНОВЛЕНИЙ", expandedHint="Нажми на релиз, чтобы увидеть изменения",
-        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.32",
+        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.33",
         themeHeading="ТЕМА ОФОРМЛЕНИЯ", themeHint="Изменения применяются сразу. Сохранение работает, если исполнитель поддерживает запись файлов.",
         themeForest="ЛЕСНАЯ", themeOcean="НОЧНОЙ ОКЕАН", themeEmber="ЗАКАТ", themeViolet="ФИОЛЕТОВАЯ", themeActive="ВЫБРАНО",
          gateSubtitle="Для доступа к хабу требуется ключ", gateIdle="Введите ключ для продолжения.",
@@ -317,7 +320,7 @@ local strings = {
         releaseSub="News and changes for Paporotnic Hub", totalGames="Games in catalog", authState="Access status",
         accessPublic="PUBLIC / TEST", accessGranted="Key activated", accessNeed="Awaiting key",
         patches="PATCHES", expandedHint="Click a release to view its updates",
-        releaseBuild="LAUNCHER BUILD: v0.2.32",
+        releaseBuild="LAUNCHER BUILD: v0.2.33",
         themeHeading="COLOR THEME", themeHint="Themes apply instantly. Saving needs executor file access.",
         themeForest="FOREST", themeOcean="NIGHT OCEAN", themeEmber="SUNSET", themeViolet="VIOLET", themeActive="ACTIVE",
          gateSubtitle="An access key is required to continue", gateIdle="Enter your key to continue.",
@@ -404,6 +407,7 @@ local themeName = "forest"
 local customAccentHex = nil
 local headerSurfaceHex = nil
 local sidebarSurfaceHex = nil
+local sidebarOpacity = 0 -- 0 = solid, .75 = noticeably translucent
 local showFoliage = true
 local lastLaunchedGameId = nil
 do
@@ -419,6 +423,9 @@ do
                 local sideHex=parseSurfaceHex(saved.sidebarSurfaceHex)
                 if topHex then headerSurfaceHex=topHex end
                 if sideHex then sidebarSurfaceHex=sideHex end
+                if type(saved.sidebarOpacity)=="number" and saved.sidebarOpacity>=0 and saved.sidebarOpacity<=0.75 then
+                    sidebarOpacity=saved.sidebarOpacity
+                end
                 if saved.showFoliage == false then showFoliage=false end
                 if saved.language=="ru" or saved.language=="en" then lang=saved.language end
                 if saved.rememberMe == true and supportsSessionFiles then rememberMe=true end
@@ -453,6 +460,7 @@ local function savePreferences()
     local ok = pcall(writefile, settingsPath,
         HttpService:JSONEncode({theme=themeName, accentHex=customAccentHex,
             headerSurfaceHex=headerSurfaceHex, sidebarSurfaceHex=sidebarSurfaceHex,
+            sidebarOpacity=sidebarOpacity,
             showFoliage=showFoliage, language=lang, rememberMe=rememberMe,
             recentGameId=lastLaunchedGameId}))
     return ok
@@ -647,6 +655,15 @@ local function repaintPalette(skipRender)
             end
         end
     end
+    for _,entry in ipairs(sidebarButtons) do
+        local nav=entry.button
+        if nav and nav.Parent then
+            local selected=entry.page==selectedTab and
+                (entry.page~="games" or entry.category==scriptCategory)
+            nav.BackgroundColor3=selected and palette.highlight or palette.card
+            nav.TextColor3=selected and palette.background or palette.text
+        end
+    end
     if not skipRender then
         task.defer(function() if alive and type(render)=="function" then render() end end)
     end
@@ -701,6 +718,14 @@ local function resetSurfaceColor(section)
         panel.BackgroundColor3=section=="header" and palette.headerSurface or palette.sidebarSurface
     end
     savePreferences()
+end
+local function setSidebarOpacity(value)
+    if type(value)~="number" or value<0 or value>0.75 then return false end
+    sidebarOpacity=value
+    local side=surfaceFrames.sidebar
+    if side and side.Parent then side.BackgroundTransparency=value end
+    savePreferences()
+    return true
 end
 local function setFoliageVisible(enabled)
     showFoliage=(enabled==true)
@@ -1043,16 +1068,15 @@ local function renderHome()
     local function thinBorder(parent,color,alpha)
         create("UIStroke",{Color=color or palette.border,Thickness=1,Transparency=alpha or 0.65},parent)
     end
-    local function imageOverlay(parent,url,radius,fit)
+    local function imageOverlay(parent,url,radius)
         if type(url)~="string" or url=="" then return nil end
-        -- Exactly fill the already-inset rounded art container. A second
-        -- +1px image inset caused visible, uneven dark strips at card edges.
+        -- v0.2.31 card art geometry, restored as requested.
         local img=create("ImageLabel",{
-            Name="OptionalArtwork",Position=UDim2.fromOffset(0,0),
-            Size=UDim2.fromScale(1,1),
+            Name="OptionalArtwork",Position=UDim2.fromOffset(1,1),
+            Size=UDim2.new(1,-2,1,-2),
             BackgroundTransparency=1,BorderSizePixel=0,
-            Image=url,ScaleType=fit and Enum.ScaleType.Fit or Enum.ScaleType.Crop,
-            ImageTransparency=fit and 0 or 0.16
+            Image=url,ScaleType=Enum.ScaleType.Crop,
+            ImageTransparency=0.16
         },parent)
         corner(img,radius or 11)
         return img
@@ -1109,7 +1133,7 @@ local function renderHome()
     -- Featured: illustrated-in-UI right third, dark readable left side.
     local hero=block(scroll,nil,UDim2.new(1,-4,0,234),palette.panel,15)
     hero.Name="FeaturedModule"
-    thinBorder(hero,palette.border,0.42)
+    -- No outline: the featured artwork itself defines the rounded card.
     create("UIGradient",{Rotation=0,Color=ColorSequence.new({
         ColorSequenceKeypoint.new(0,Color3.fromRGB(9,22,18)),
         ColorSequenceKeypoint.new(0.58,Color3.fromRGB(17,21,35)),
@@ -1135,14 +1159,9 @@ local function renderHome()
     emblem.TextXAlignment=Enum.TextXAlignment.Center
     textAt(artPanel,"MODULE  /  01",10,palette.text,16,15,205,21,true).TextTransparency=0.22
     textAt(artPanel,"PAPOROTNIC",11,palette.text,18,205,230,18,true).TextTransparency=0.48
-    local currentImage=""
-    if premiumImageId(PREMIUM_ASSETS.heroBanner) then
-        currentImage=PREMIUM_ASSETS.heroBanner
-    elseif featured and tonumber(featured.universeId) then
-        currentImage=gameIconContent(featured) or ""
-    end
-    local optionalArt=imageOverlay(artPanel,currentImage)
-    if optionalArt then optionalArt.ImageTransparency=0.16 end
+    -- No game-icon overlay behind the anime illustration: it caused the
+    -- half-visible DISASSEMBLE logo underneath the character. Game icons
+    -- remain on their actual Library/Games cards.
     -- Real layered hero art sourced from the original mockup, independent of UI buttons.
     local featuredArtwork=create("ImageLabel",{
         Name="FeaturedArtwork",Position=UDim2.fromOffset(1,1),
@@ -1179,7 +1198,7 @@ local function renderHome()
     end,false)
     local version=block(hero,UDim2.new(1,-139,1,-47),UDim2.fromOffset(121,31),palette.background,9)
     version.BackgroundTransparency=0.12
-    thinBorder(version,palette.border,.5)
+    -- Leave version badge clean without a secondary rim.
     textAt(version,featured and tostring(featured.version or "CATALOG") or "LIBRARY",
         11,palette.text,9,1,102,15,true)
     textAt(version,featured and (isSupported(featured) and L("● ТЕКУЩИЙ ПЛЕЙС","● CURRENT PLACE")
@@ -1195,7 +1214,7 @@ local function renderHome()
         local rowIndex=math.floor((i-1)/4)
         local tile=block(gallery,UDim2.new(col*.25,col*3,0,rowIndex*157),
             UDim2.new(.25,-10,0,151),palette.panel,12)
-        thinBorder(tile,palette.highlight,.50)
+        -- No glowing border on the Disassemble Car Tycoon card.
         local cover=block(tile,UDim2.fromOffset(1,1),UDim2.new(1,-2,0,97),palette.card,11)
         create("UIGradient",{Rotation=35,Color=ColorSequence.new({
             ColorSequenceKeypoint.new(0,palette.card),
@@ -1209,7 +1228,7 @@ local function renderHome()
             palette.highlight,0,12,72,48,true)
         letter.TextXAlignment=Enum.TextXAlignment.Center
         if tonumber(item.universeId) then
-            imageOverlay(cover,gameIconContent(item),11,true)
+            imageOverlay(cover,gameIconContent(item),11)
         end
         local itemTitle=textAt(tile,tostring(item.title or "Game"),12,palette.text,10,102,156,28,true)
         itemTitle.Size=UDim2.new(1,-20,0,27)
@@ -1231,18 +1250,18 @@ local function renderHome()
     local utils=block(scroll,nil,UDim2.new(1,-4,0,171),palette.background,0)
     utils.BackgroundTransparency=1
     local tile=block(utils,UDim2.fromOffset(0,0),UDim2.new(.25,-10,1,-2),palette.panel,12)
-    thinBorder(tile,palette.highlight,.35)
+    -- No glowing border on the Infinite Yield card.
     local banner=block(tile,UDim2.fromOffset(1,1),UDim2.new(1,-2,0,99),Color3.fromRGB(25,23,27),11)
     local iyFallback=textAt(banner,"INFINITE YIELD",17,Color3.fromRGB(240,240,240),7,27,170,46,true)
     iyFallback.Size=UDim2.new(1,-14,0,46)
     iyFallback.TextXAlignment=Enum.TextXAlignment.Center
     -- The user's own Infinite Yield image is the *only* image source for this card.
     local iyImage=create("ImageLabel",{
-        Name="UserInfiniteYieldArtwork",Position=UDim2.fromOffset(0,0),
-        Size=UDim2.fromScale(1,1),
-        BackgroundTransparency=1,BorderSizePixel=0,Image="",ScaleType=Enum.ScaleType.Fit
+        Name="UserInfiniteYieldArtwork",Position=UDim2.fromOffset(1,1),
+        Size=UDim2.new(1,-2,1,-2),
+        BackgroundTransparency=1,BorderSizePixel=0,Image="",ScaleType=Enum.ScaleType.Crop
     },banner)
-    corner(iyImage,11)
+    corner(iyImage,10)
     attachLayer(iyImage,"infiniteYieldCard")
     local name=textAt(tile,"Infinite Yield",13,palette.text,10,107,165,21,true)
     name.Size=UDim2.new(1,-20,0,22)
@@ -1319,12 +1338,12 @@ local function renderGameScripts(panel)
         local thumb=gameIconContent(item)
         if thumb then
             local artwork=create("ImageLabel",{
-                Name="RealGameThumbnail",Position=UDim2.fromOffset(0,0),
-                Size=UDim2.fromScale(1,1),
+                Name="RealGameThumbnail",Position=UDim2.fromOffset(1,1),
+                Size=UDim2.new(1,-2,1,-2),
                 BackgroundTransparency=1,BorderSizePixel=0,
-                Image=thumb,ScaleType=Enum.ScaleType.Fit,ImageTransparency=.01
+                Image=thumb,ScaleType=Enum.ScaleType.Crop,ImageTransparency=.04
             },holder)
-            corner(artwork,12)
+            corner(artwork,11)
         end
         return holder
     end
@@ -1695,7 +1714,7 @@ local function renderSettings()
         Name="ThemeEditorScroll",Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
         BorderSizePixel=0,ScrollBarThickness=4,ScrollBarImageColor3=palette.highlight,
         ScrollingDirection=Enum.ScrollingDirection.Y,
-        CanvasSize=UDim2.fromOffset(0,1150)
+        CanvasSize=UDim2.fromOffset(0,1310)
     },content)
     scroll.CanvasPosition=Vector2.new(0,restoreScrollY)
     connect(scroll:GetPropertyChangedSignal("CanvasPosition"),function()
@@ -1707,7 +1726,7 @@ local function renderSettings()
         end
     end)
     local page=create("Frame",{
-        Size=UDim2.new(1,-14,0,1140),BackgroundTransparency=1,BorderSizePixel=0
+        Size=UDim2.new(1,-14,0,1298),BackgroundTransparency=1,BorderSizePixel=0
     },scroll)
     local heading=txt(page,T("settings"),22,palette.text,38)
     heading.Font=Enum.Font.GothamBold
@@ -1887,20 +1906,49 @@ local function renderSettings()
         "Dark HEX colors only to preserve text contrast. The fern logo stays unchanged."),11,palette.muted,28)
     colorTip.Position=UDim2.fromOffset(0,757)
 
+    -- Translucency applies only to the left Sidebar surface; Top Bar remains solid.
+    local opacityHeading=txt(page,L("ПРОЗРАЧНОСТЬ БОКОВОЙ ПАНЕЛИ","SIDEBAR OPACITY"),14,palette.text,24)
+    opacityHeading.Font=Enum.Font.GothamBold
+    opacityHeading.Position=UDim2.fromOffset(0,785)
+    local opacityOptions={0,0.2,0.4,0.6,0.75}
+    local opacityChoices={}
+    local function refreshOpacityColors()
+        for _,entry in ipairs(opacityChoices) do
+            local selected=math.abs(sidebarOpacity-entry.value)<0.001
+            entry.button.BackgroundColor3=selected and palette.highlight or palette.card
+            entry.button.TextColor3=selected and palette.background or palette.text
+        end
+    end
+    for i,value in ipairs(opacityOptions) do
+        local label=value==0 and L("НЕПРОЗР.","SOLID") or tostring(math.floor(value*100+0.5)).."%"
+        local choice=button(page,label,88,34,function()
+            if setSidebarOpacity(value) then
+                refreshOpacityColors() -- no page rebuild; scroll position stays put
+            end
+        end,false)
+        choice.Name="SidebarOpacity_"..tostring(i)
+        choice.Position=UDim2.fromOffset((i-1)*94,816)
+        table.insert(opacityChoices,{value=value,button=choice})
+    end
+    refreshOpacityColors()
+    local opacityHint=txt(page,L("0% — сплошной фон, 75% — полупрозрачный. Не влияет на кнопки.",
+        "0% is solid, 75% lets the wallpaper through; controls stay opaque."),11,palette.muted,31)
+    opacityHint.Position=UDim2.fromOffset(0,857)
+
     local foliageToggle=button(page,showFoliage and L("ЛИСТВА: ВКЛ", "FOLIAGE: ON")
         or L("ЛИСТВА: ВЫКЛ", "FOLIAGE: OFF"),206,34,function()
         setFoliageVisible(not showFoliage)
         if alive then render() end
     end,showFoliage)
-    foliageToggle.Position=UDim2.fromOffset(0,787)
+    foliageToggle.Position=UDim2.fromOffset(0,909)
     local foliageInfo=txt(page,L("Декоративные папоротники по краям. Логотип останется.",
         "Decorative corner ferns; the logo stays visible."),12,palette.muted,32)
-    foliageInfo.Position=UDim2.fromOffset(222,787)
+    foliageInfo.Position=UDim2.fromOffset(222,909)
     foliageInfo.Size=UDim2.new(1,-230,0,32)
 
     local rememberHeading=txt(page,T("rememberTitle"),16,palette.text,28)
     rememberHeading.Font=Enum.Font.GothamBold
-    rememberHeading.Position=UDim2.fromOffset(0,845)
+    rememberHeading.Position=UDim2.fromOffset(0,967)
     local rememberToggle=button(page,rememberMe and T("rememberOn") or T("rememberOff"),246,38,function()
         if not supportsSessionFiles then info(T("rememberUnavailable"),true);return end
         if rememberMe then
@@ -1927,29 +1975,29 @@ local function renderSettings()
         end
         if alive then render() end
     end,rememberMe)
-    rememberToggle.Position=UDim2.fromOffset(0,880)
+    rememberToggle.Position=UDim2.fromOffset(0,1002)
     if not supportsSessionFiles then
         rememberToggle.Active=false
         rememberToggle.AutoButtonColor=false
     end
     local rememberDesc=txt(page,T("rememberHint"),12,palette.muted,34)
-    rememberDesc.Position=UDim2.fromOffset(261,882)
+    rememberDesc.Position=UDim2.fromOffset(261,1004)
     rememberDesc.Size=UDim2.new(1,-270,0,34)
     local rememberWarning=txt(page,T("rememberWarning"),11,palette.alert,32)
-    rememberWarning.Position=UDim2.fromOffset(0,924)
+    rememberWarning.Position=UDim2.fromOffset(0,1046)
     rememberWarning.Size=UDim2.new(1,-15,0,32)
     local recentHint=txt(page,T("recentWarning"),11,palette.alert,34)
-    recentHint.Position=UDim2.fromOffset(0,953)
+    recentHint.Position=UDim2.fromOffset(0,1075)
     recentHint.Size=UDim2.new(1,-15,0,34)
     recentHint.TextWrapped=true
     local hideHint=txt(page,T("hide"),13,palette.muted,28)
-    hideHint.Position=UDim2.fromOffset(0,999)
+    hideHint.Position=UDim2.fromOffset(0,1121)
     local exit=button(page,T("exit"),260,39,function()
         if global.__PaporotnicLauncherStop then global.__PaporotnicLauncherStop() end
     end,false)
-    exit.Position=UDim2.fromOffset(0,1030)
+    exit.Position=UDim2.fromOffset(0,1152)
     local note=txt(page,T("note"),12,palette.muted,36)
-    note.Position=UDim2.fromOffset(0,1072)
+    note.Position=UDim2.fromOffset(0,1194)
     note.Size=UDim2.new(1,-15,0,32)
 end
 
@@ -2068,16 +2116,18 @@ local function headerChip(textValue,x,w)
 end
 local stateChip,stateText=headerChip("●  ACCESS VERIFIED",326,170)
 local apiChip,apiText=headerChip("KEY SYSTEM",510,139)
-local buildChip,buildText=headerChip("HUB  v0.2.32",663,150)
+local buildChip,buildText=headerChip("HUB  v0.2.33",663,150)
 
 local profile=create("Frame",{Position=UDim2.new(1,-333,0,9),Size=UDim2.fromOffset(189,58),
     BackgroundColor3=palette.panel,BorderSizePixel=0},top)
 corner(profile,25)
+themeBindings[profile]={BackgroundColor3="panel"}
 local avatar=create("ImageLabel",{Position=UDim2.fromOffset(8,6),Size=UDim2.fromOffset(46,46),
     Image="rbxthumb://type=AvatarHeadShot&id="..tostring(localPlayer.UserId).."&w=150&h=150",
     BackgroundColor3=palette.card,BorderSizePixel=0},profile)
 corner(avatar,23)
-create("UIStroke",{Color=palette.highlight,Thickness=1.8,Transparency=0.13},avatar)
+local avatarOutline=create("UIStroke",{Color=palette.highlight,Thickness=1.8,Transparency=0.30},avatar)
+themeBindings[avatarOutline]={Color="highlight"}
 premiumHeaderName=txt(profile,localPlayer.DisplayName,12,palette.text,21)
 premiumHeaderName.Font=Enum.Font.GothamBold
 premiumHeaderName.Position=UDim2.fromOffset(61,8)
@@ -2100,7 +2150,7 @@ close.TextSize=24
 local sidebar=create("Frame",{
     Name="DashboardSidebar",Position=UDim2.fromOffset(0,77),
     Size=UDim2.new(0,224,1,-77),BackgroundColor3=palette.sidebarSurface,
-    BorderSizePixel=0},root)
+    BackgroundTransparency=sidebarOpacity,BorderSizePixel=0},root)
 themeBindings[sidebar]={BackgroundColor3="sidebarSurface"}
 surfaceFrames.sidebar=sidebar
 create("Frame",{Position=UDim2.new(1,-1,0,0),Size=UDim2.new(0,1,1,0),
@@ -2149,16 +2199,19 @@ local accessSection=create("Frame",{
     Size=UDim2.new(1,-25,0,111),BackgroundColor3=palette.panel,BorderSizePixel=0
 },sidebar)
 corner(accessSection,13)
-create("UIStroke",{Thickness=1,Color=palette.border,Transparency=0.73},accessSection)
+themeBindings[accessSection]={BackgroundColor3="panel"}
+-- No neon border around quick actions; this area is visually quiet.
 local sideSwitch=button(accessSection,T("switchKey"),170,40,function()
     if type(returnToAuthGate)=="function" then returnToAuthGate() end
 end,true)
 sideSwitch.Name="SidebarSwitchKey"
+themeBindings[sideSwitch]={BackgroundColor3="highlight",TextColor3="background"}
 sideSwitch.Position=UDim2.fromOffset(13,11)
 sideSwitch.TextSize=13
 corner(sideSwitch,9)
 local sideHide=button(accessSection,"F7  ·  HIDE",170,39,function() screen.Enabled=false end,false)
 sideHide.Name="SidebarHide"
+themeBindings[sideHide]={BackgroundColor3="card",TextColor3="text"}
 sideHide.Position=UDim2.fromOffset(13,61)
 sideHide.TextSize=14
 sideHide.Font=Enum.Font.GothamBold
@@ -2248,12 +2301,12 @@ renderRightRail=function()
     announcetext.TextYAlignment=Enum.TextYAlignment.Top
     announcetext.TextTruncate=Enum.TextTruncate.AtEnd
     local updates=rrPanel(485,150)
-    rrLabel(updates,"↻  "..L("Обновления","Latest Updates"),15,palette.text,13,8,250,28,true)
+    rrLabel(updates,L("Обновления","Latest Updates"),15,palette.text,13,8,250,28,true)
     local recent={
+        {"v0.2.33",L("Прозрачность и цвета","Sidebar & Colors")},
         {"v0.2.32",L("Исправления цветов и карточек","Panel & Card Fixes")},
         {"v0.2.31",L("Настройка панелей","Panel Colors")},
         {"v0.2.30",L("Полировка интерфейса","UI Polish")},
-        {"v0.2.29",L("Библиотека игр 2.0","Game Library 2.0")},
     }
     for i,r in ipairs(recent) do
         local y=40+(i-1)*26
@@ -2746,4 +2799,4 @@ local function playLaunchIntro()
 end
 
 task.spawn(playLaunchIntro)
-print("[Paporotnic Universal Launcher] v0.2.32 | PlaceId="..tostring(game.PlaceId))
+print("[Paporotnic Universal Launcher] v0.2.33 | PlaceId="..tostring(game.PlaceId))
