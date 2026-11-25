@@ -1,4 +1,4 @@
--- PAPOROTNIC HUB | universal launcher v0.2.29
+-- PAPOROTNIC HUB | universal launcher v0.2.30
 -- 3-second loading gate, key-only entry, and quiet accent-glow interface.
 -- Based on the user's v0.2.14 launcher; auth API and game module flow preserved.
 
@@ -40,11 +40,27 @@ local LAYERED_FILES = {
 }
 local function premiumImageId(value)
     if type(value)=="number" and value > 0 then return "rbxassetid://"..tostring(math.floor(value)) end
+    if type(value)=="string" and value:match("^%d+$") and tonumber(value)>0 then
+        return "rbxassetid://"..value
+    end
     return type(value)=="string" and value:match("^rbxassetid://%d+$") and value or nil
+end
+-- Roblox-supported GameIcon thumbnail sizes are 50/150/256/512, NOT 420.
+-- If a game's thumbnail is unavailable in a particular executor, catalog.json
+-- can optionally provide imageAssetId as an uploaded Roblox image ID.
+local function gameIconContent(item)
+    if type(item)~="table" then return nil end
+    local uploaded=premiumImageId(item.imageAssetId or item.iconAssetId)
+    if uploaded then return uploaded end
+    local universe=tonumber(item.universeId)
+    if universe and universe>0 then
+        return "rbxthumb://type=GameIcon&id="..tostring(math.floor(universe)).."&w=512&h=512"
+    end
+    return nil
 end
 
 local FALLBACK = {
-    version = "0.2.29 (offline catalog)",
+    version = "0.2.30 (offline catalog)",
     latestVersion = "Paporotnic Hub Core v0.2.8",
     lifetimePrice = "$ ?? / TBA",
     announcement = "Welcome, LIL Paporotnics! The universal hub is online.",
@@ -59,6 +75,9 @@ local FALLBACK = {
             id = "release-020", version = "v0.2.0", name = "Launcher redesign",
             summary = "Larger interface, fern background and a dedicated Releases page.",
             updates = {
+                {version = "v0.2.30", title = "UI Polish · clipping and license styling",
+                  body = "No green transition flash, rounded game and IY artwork, compact sidebar controls, corrected game thumbnails and license typography.",
+                  bodyRu = "Убрана зелёная рамка при входе, исправлены скругления картинок игр и IY, упрощены кнопки слева, возвращены обложки и оформлены статусы лицензий."},
                 {version = "v0.2.29", title = "Game Library 2.0 · game details",
                   body = "A catalog-driven game library with a focused game page, real metadata, listed features, compatibility status, and a safe Launch button. No placeholder games.",
                   bodyRu = "Библиотека игр из каталога с отдельной страницей игры, настоящими данными, описанием возможностей и проверкой совместимости перед запуском. Никаких выдуманных игр."},
@@ -225,7 +244,7 @@ local strings = {
         releaseSub="Новости и изменения Paporotnic Hub", totalGames="Игр в каталоге", authState="Статус доступа",
         accessPublic="PUBLIC / TEST", accessGranted="Ключ активирован", accessNeed="Ожидает ключ",
         patches="ПОДОБНОВЛЕНИЙ", expandedHint="Нажми на релиз, чтобы увидеть изменения",
-        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.29",
+        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.30",
         themeHeading="ТЕМА ОФОРМЛЕНИЯ", themeHint="Изменения применяются сразу. Сохранение работает, если исполнитель поддерживает запись файлов.",
         themeForest="ЛЕСНАЯ", themeOcean="НОЧНОЙ ОКЕАН", themeEmber="ЗАКАТ", themeViolet="ФИОЛЕТОВАЯ", themeActive="ВЫБРАНО",
          gateSubtitle="Для доступа к хабу требуется ключ", gateIdle="Введите ключ для продолжения.",
@@ -292,7 +311,7 @@ local strings = {
         releaseSub="News and changes for Paporotnic Hub", totalGames="Games in catalog", authState="Access status",
         accessPublic="PUBLIC / TEST", accessGranted="Key activated", accessNeed="Awaiting key",
         patches="PATCHES", expandedHint="Click a release to view its updates",
-        releaseBuild="LAUNCHER BUILD: v0.2.29",
+        releaseBuild="LAUNCHER BUILD: v0.2.30",
         themeHeading="COLOR THEME", themeHint="Themes apply instantly. Saving needs executor file access.",
         themeForest="FOREST", themeOcean="NIGHT OCEAN", themeEmber="SUNSET", themeViolet="VIOLET", themeActive="ACTIVE",
          gateSubtitle="An access key is required to continue", gateIdle="Enter your key to continue.",
@@ -959,16 +978,18 @@ local function renderHome()
     local function thinBorder(parent,color,alpha)
         create("UIStroke",{Color=color or palette.border,Thickness=1,Transparency=alpha or 0.65},parent)
     end
-    local function imageOverlay(parent,url)
+    local function imageOverlay(parent,url,radius)
         if type(url)~="string" or url=="" then return nil end
-        -- BackgroundTransparency=1: fallback underneath remains visible
-        -- while Roblox downloads the image or when asset access is denied.
+        -- Round the actual IMAGE, not only the parent: otherwise PNG/image
+        -- corners can appear square despite ClipsDescendants on a Frame.
         local img=create("ImageLabel",{
-            Name="OptionalArtwork",Size=UDim2.fromScale(1,1),
+            Name="OptionalArtwork",Position=UDim2.fromOffset(1,1),
+            Size=UDim2.new(1,-2,1,-2),
             BackgroundTransparency=1,BorderSizePixel=0,
             Image=url,ScaleType=Enum.ScaleType.Crop,
             ImageTransparency=0.16
         },parent)
+        corner(img,radius or 11)
         return img
     end
     local function section(parent,ru,en,target,category)
@@ -1053,16 +1074,18 @@ local function renderHome()
     if premiumImageId(PREMIUM_ASSETS.heroBanner) then
         currentImage=PREMIUM_ASSETS.heroBanner
     elseif featured and tonumber(featured.universeId) then
-        currentImage="rbxthumb://type=GameIcon&id="..tostring(featured.universeId).."&w=420&h=420"
+        currentImage=gameIconContent(featured) or ""
     end
     local optionalArt=imageOverlay(artPanel,currentImage)
     if optionalArt then optionalArt.ImageTransparency=0.16 end
     -- Real layered hero art sourced from the original mockup, independent of UI buttons.
     local featuredArtwork=create("ImageLabel",{
-        Name="FeaturedArtwork",Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
+        Name="FeaturedArtwork",Position=UDim2.fromOffset(1,1),
+        Size=UDim2.new(1,-2,1,-2),BackgroundTransparency=1,
         BorderSizePixel=0,Image="",ImageTransparency=0.04,
         ScaleType=Enum.ScaleType.Crop
     },hero)
+    corner(featuredArtwork,14)
     attachLayer(featuredArtwork,"heroBanner")
     -- Dark left mask keeps copy legible even with a bright user-supplied art.
     local textBackdrop=block(hero,UDim2.fromOffset(0,0),UDim2.new(.67,0,1,0),palette.background,0)
@@ -1108,7 +1131,7 @@ local function renderHome()
         local tile=block(gallery,UDim2.new(col*.25,col*3,0,rowIndex*157),
             UDim2.new(.25,-10,0,151),palette.panel,12)
         thinBorder(tile,palette.highlight,.50)
-        local cover=block(tile,UDim2.fromOffset(0,0),UDim2.new(1,0,0,98),palette.card,0)
+        local cover=block(tile,UDim2.fromOffset(1,1),UDim2.new(1,-2,0,97),palette.card,11)
         create("UIGradient",{Rotation=35,Color=ColorSequence.new({
             ColorSequenceKeypoint.new(0,palette.card),
             ColorSequenceKeypoint.new(.55,palette.panel),
@@ -1121,7 +1144,7 @@ local function renderHome()
             palette.highlight,0,12,72,48,true)
         letter.TextXAlignment=Enum.TextXAlignment.Center
         if tonumber(item.universeId) then
-            imageOverlay(cover,"rbxthumb://type=GameIcon&id="..tostring(item.universeId).."&w=420&h=420")
+            imageOverlay(cover,gameIconContent(item),11)
         end
         local itemTitle=textAt(tile,tostring(item.title or "Game"),12,palette.text,10,102,156,28,true)
         itemTitle.Size=UDim2.new(1,-20,0,27)
@@ -1144,15 +1167,17 @@ local function renderHome()
     utils.BackgroundTransparency=1
     local tile=block(utils,UDim2.fromOffset(0,0),UDim2.new(.25,-10,1,-2),palette.panel,12)
     thinBorder(tile,palette.highlight,.35)
-    local banner=block(tile,UDim2.fromOffset(0,0),UDim2.new(1,0,0,100),Color3.fromRGB(25,23,27),0)
+    local banner=block(tile,UDim2.fromOffset(1,1),UDim2.new(1,-2,0,99),Color3.fromRGB(25,23,27),11)
     local iyFallback=textAt(banner,"INFINITE YIELD",17,Color3.fromRGB(240,240,240),7,27,170,46,true)
     iyFallback.Size=UDim2.new(1,-14,0,46)
     iyFallback.TextXAlignment=Enum.TextXAlignment.Center
     -- The user's own Infinite Yield image is the *only* image source for this card.
     local iyImage=create("ImageLabel",{
-        Name="UserInfiniteYieldArtwork",Size=UDim2.fromScale(1,1),
+        Name="UserInfiniteYieldArtwork",Position=UDim2.fromOffset(1,1),
+        Size=UDim2.new(1,-2,1,-2),
         BackgroundTransparency=1,BorderSizePixel=0,Image="",ScaleType=Enum.ScaleType.Crop
     },banner)
+    corner(iyImage,10)
     attachLayer(iyImage,"infiniteYieldCard")
     local name=textAt(tile,"Infinite Yield",13,palette.text,10,107,165,21,true)
     name.Size=UDim2.new(1,-20,0,22)
@@ -1226,14 +1251,15 @@ local function renderGameScripts(panel)
         local first=tostring(item.title or "G"):sub(1,1):upper()
         local letter=simpleLabel(ring,first,UDim2.fromScale(0,0),UDim2.fromScale(1,1),36,palette.highlight,true)
         letter.TextXAlignment=Enum.TextXAlignment.Center
-        local universe=tonumber(item.universeId)
-        if universe and universe>0 then
-            create("ImageLabel",{
-                Name="OptionalGameThumbnail",Size=UDim2.fromScale(1,1),
+        local thumb=gameIconContent(item)
+        if thumb then
+            local artwork=create("ImageLabel",{
+                Name="RealGameThumbnail",Position=UDim2.fromOffset(1,1),
+                Size=UDim2.new(1,-2,1,-2),
                 BackgroundTransparency=1,BorderSizePixel=0,
-                Image="rbxthumb://type=GameIcon&id="..tostring(math.floor(universe)).."&w=420&h=420",
-                ScaleType=Enum.ScaleType.Crop,ImageTransparency=.04
+                Image=thumb,ScaleType=Enum.ScaleType.Crop,ImageTransparency=.04
             },holder)
+            corner(artwork,11)
         end
         return holder
     end
@@ -1458,10 +1484,11 @@ local function renderUniversalScripts(panel)
     iconText.Font=Enum.Font.GothamBold
     iconText.Position=UDim2.fromOffset(0,15)
     local iconArtwork=create("ImageLabel",{
-        Name="InfiniteYieldOriginalLogo",Position=UDim2.fromOffset(0,0),
-        Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
+        Name="InfiniteYieldOriginalLogo",Position=UDim2.fromOffset(1,1),
+        Size=UDim2.new(1,-2,1,-2),BackgroundTransparency=1,
         BorderSizePixel=0,Image="",ScaleType=Enum.ScaleType.Fit
     },iconHolder)
+    corner(iconArtwork,13)
     attachLayer(iconArtwork,"infiniteYield")
     local title=txt(row,"Infinite Yield",21,palette.text,30)
     title.Font=Enum.Font.GothamBold
@@ -1805,7 +1832,12 @@ function render()
         end
     end
     if premiumHeaderType and premiumHeaderType.Parent then
-        premiumHeaderType.Text=approvedKeyKind=="temporary" and T("dashboardTemporary") or T("dashboardLifetime")
+        local lifetime=approvedKeyKind=="lifetime"
+        premiumHeaderType.Text=lifetime and "👑 LIFETIME" or T("dashboardTemporary")
+        premiumHeaderType.TextColor3=lifetime and Color3.fromRGB(255,207,82)
+            or Color3.fromRGB(218,221,229)
+        premiumHeaderType.Font=Enum.Font.GothamMedium
+        premiumHeaderType.TextSize=11
     end
     if selectedTab=="games" then renderGames()
     elseif selectedTab=="releases" then renderReleases()
@@ -1885,7 +1917,7 @@ local function headerChip(textValue,x,w)
 end
 local stateChip,stateText=headerChip("●  ACCESS VERIFIED",326,170)
 local apiChip,apiText=headerChip("KEY SYSTEM",510,139)
-local buildChip,buildText=headerChip("HUB  v0.2.29",663,150)
+local buildChip,buildText=headerChip("HUB  v0.2.30",663,150)
 
 local profile=create("Frame",{Position=UDim2.new(1,-333,0,9),Size=UDim2.fromOffset(189,58),
     BackgroundColor3=palette.panel,BorderSizePixel=0},top)
@@ -1965,38 +1997,28 @@ end
 local separator=create("Frame",{Position=UDim2.fromOffset(14,419),Size=UDim2.fromOffset(194,1),
     BackgroundColor3=palette.border,BorderSizePixel=0},sidebar)
 
+-- No duplicated "YOUR ACCESS" summary here: the top profile and right-hand
+-- Access Status already show the license, leaving the sidebar for actions.
 local accessSection=create("Frame",{
-    Name="SidebarAccessCard",Position=UDim2.new(0,12,1,-241),
-    Size=UDim2.new(1,-25,0,223),BackgroundColor3=palette.panel,BorderSizePixel=0
+    Name="SidebarQuickActions",Position=UDim2.new(0,12,1,-128),
+    Size=UDim2.new(1,-25,0,111),BackgroundColor3=palette.panel,BorderSizePixel=0
 },sidebar)
-corner(accessSection,14)
-create("UIStroke",{Thickness=1,Color=palette.border,Transparency=0.62},accessSection)
-local sideTitle=txt(accessSection,T("dashboardAccess"),14,palette.text,30)
-sideTitle.Font=Enum.Font.GothamBold
-sideTitle.Position=UDim2.fromOffset(12,10)
-sideTitle.Size=UDim2.new(1,-24,0,29)
-local sideKeyType=txt(accessSection,"—",12,palette.highlight,24)
-sideKeyType.Name="SideKeyType"
-sideKeyType.Position=UDim2.fromOffset(13,48)
-sideKeyType.Size=UDim2.new(1,-26,0,24)
-sidebarAccessText=txt(accessSection,"—",12,palette.text,27)
-sidebarAccessText.Position=UDim2.fromOffset(13,78)
-sidebarAccessText.Size=UDim2.new(1,-26,0,27)
-local sideServer=txt(accessSection,"● VERIFIED BY VPS",10,palette.highlight,25)
-sideServer.Position=UDim2.fromOffset(13,107)
-sideServer.Size=UDim2.new(1,-26,0,25)
-local sideSwitch=button(accessSection,T("switchKey"),170,39,function()
+corner(accessSection,13)
+create("UIStroke",{Thickness=1,Color=palette.border,Transparency=0.73},accessSection)
+local sideSwitch=button(accessSection,T("switchKey"),170,40,function()
     if type(returnToAuthGate)=="function" then returnToAuthGate() end
 end,true)
 sideSwitch.Name="SidebarSwitchKey"
-sideSwitch.Position=UDim2.fromOffset(13,144)
-sideSwitch.TextSize=12
+sideSwitch.Position=UDim2.fromOffset(13,11)
+sideSwitch.TextSize=13
 corner(sideSwitch,9)
-local sideHide=button(accessSection,"F7  ·  HIDE",170,29,function() screen.Enabled=false end,false)
-sideHide.Position=UDim2.fromOffset(13,187)
-sideHide.TextSize=10
-sideHide.BackgroundTransparency=0.34
-corner(sideHide,8)
+local sideHide=button(accessSection,"F7  ·  HIDE",170,39,function() screen.Enabled=false end,false)
+sideHide.Name="SidebarHide"
+sideHide.Position=UDim2.fromOffset(13,61)
+sideHide.TextSize=14
+sideHide.Font=Enum.Font.GothamBold
+sideHide.BackgroundTransparency=0.20
+corner(sideHide,9)
 
 content=create("Frame",{
     Name="PageContent",Position=UDim2.fromOffset(239,93),
@@ -2036,7 +2058,7 @@ renderRightRail=function()
         (type(approvedSecondsLeft)=="number" and
             (tostring(math.max(1,math.ceil(approvedSecondsLeft/3600))).."h "..L("осталось","left")) or L("Ограничен","Limited")) or L("Никогда","Never")
     local rows={
-        {L("Тип лицензии","License Type"),approvedKeyKind=="temporary" and L("Временный","Temporary") or "Lifetime"},
+        {L("Тип лицензии","License Type"),approvedKeyKind=="temporary" and L("Временный","Temporary") or "👑 Lifetime"},
         {L("Срок","Expires"),timeText},
         {"HWID",(type(gethwid)=="function" or type(global.gethwid)=="function") and L("Доступен","Available") or L("Нет API","Not available")},
         {L("Проверка","Verification"),"VERIFIED"},
@@ -2044,8 +2066,14 @@ renderRightRail=function()
     for i,r in ipairs(rows) do
         local y=47+(i-1)*30
         rrLabel(access,r[1],11,palette.muted,16,y,150,22,false)
-        local v=rrLabel(access,r[2],11,(i==1 or i==2 or i==3 or i==4) and palette.highlight or palette.text,169,y,112,22,true)
+        local labelColor=palette.highlight
+        if i==1 then
+            labelColor=approvedKeyKind=="temporary" and Color3.fromRGB(218,221,229)
+                or Color3.fromRGB(255,207,82)
+        end
+        local v=rrLabel(access,r[2],i==1 and 12 or 11,labelColor,161,y,120,22,true)
         v.TextXAlignment=Enum.TextXAlignment.Right
+        if i==1 then v.Font=Enum.Font.GothamMedium end
         if i~=4 then
             create("Frame",{Position=UDim2.fromOffset(14,y+27),Size=UDim2.fromOffset(267,1),
                 BackgroundColor3=palette.border,BackgroundTransparency=0.55,BorderSizePixel=0},access)
@@ -2069,7 +2097,7 @@ renderRightRail=function()
     local note=create("Frame",{Position=UDim2.fromOffset(10,40),Size=UDim2.fromOffset(274,83),
         BackgroundColor3=palette.card,BorderSizePixel=0},announces)
     corner(note,9)
-    rrLabel(note,"✦  "..L("Добро пожаловать!","Welcome to Paporotnic"),12,palette.text,10,8,249,23,true)
+    rrLabel(note,L("Добро пожаловать!","Welcome to Paporotnic"),12,palette.text,10,8,249,23,true)
     local message=tostring(catalog.announcement or L("Больше игр скоро.","More modules coming soon."))
     local announcetext=rrLabel(note,message,10,palette.muted,11,30,253,49,false)
     announcetext.TextYAlignment=Enum.TextYAlignment.Top
@@ -2077,16 +2105,14 @@ renderRightRail=function()
     local updates=rrPanel(485,150)
     rrLabel(updates,"↻  "..L("Обновления","Latest Updates"),15,palette.text,13,8,250,28,true)
     local recent={
-        {"v0.2.29",L("Game Library 2.0","Game Library 2.0")},
+        {"v0.2.30",L("Полировка интерфейса","UI Polish")},
+        {"v0.2.29",L("Библиотека игр 2.0","Game Library 2.0")},
         {"v0.2.28",L("Редактор оформления","Theme Editor")},
         {"v0.2.27",L("Слои и графика","Layered Visual Fix")},
-        {"v0.2.26",L("Чистый интерфейс","Clean Rework")},
-        {"v0.2.25",L("Premium Dashboard","Premium Dashboard")},
-        {"v0.2.24",L("Главная страница","Home Foundation")},
     }
     for i,r in ipairs(recent) do
         local y=40+(i-1)*26
-        local bg=create("Frame",{Position=UDim2.fromOffset(10,y),Size=UDim2.fromOffset(275,23),
+        local bg=create("Frame",{Position=UDim2.fromOffset(10,y),Size=UDim2.fromOffset(275,22),
             BorderSizePixel=0,BackgroundColor3=i==1 and palette.card or palette.panel},updates)
         if i==1 then corner(bg,6) end
         rrLabel(bg,r[1],10,i==1 and palette.highlight or palette.muted,7,0,64,21,true)
@@ -2358,6 +2384,10 @@ local function playLaunchIntro()
 
     local function revealMain()
         if not alive or uiPhase~="UNLOCKING" or not overlay.Parent then return end
+        -- Remove the old gate's green UIStroke AND its whole panel before
+        -- revealing Home. A transparent Frame alone does not hide UIStroke.
+        gate.Visible=false
+        glow.Visible=false
         -- Keep UNLOCKING until the UI transition has completed.
         root.Visible=true
         -- Keep the main window at its original 980 x 720 size, but reveal it
@@ -2433,6 +2463,8 @@ local function playLaunchIntro()
         rootStroke.Enabled=false
         overlay.Visible=true
         overlay.BackgroundTransparency=0.57
+        gate.Visible=true
+        glow.Visible=true
         gate.BackgroundTransparency=0.025
         glow.BackgroundTransparency=0.975
         bootBody.Visible=false
@@ -2569,4 +2601,4 @@ local function playLaunchIntro()
 end
 
 task.spawn(playLaunchIntro)
-print("[Paporotnic Universal Launcher] v0.2.29 | PlaceId="..tostring(game.PlaceId))
+print("[Paporotnic Universal Launcher] v0.2.30 | PlaceId="..tostring(game.PlaceId))
