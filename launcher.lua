@@ -1,4 +1,4 @@
--- PAPOROTNIC HUB | universal launcher v0.2.26
+-- PAPOROTNIC HUB | universal launcher v0.2.27
 -- 3-second loading gate, key-only entry, and quiet accent-glow interface.
 -- Based on the user's v0.2.14 launcher; auth API and game module flow preserved.
 
@@ -18,14 +18,28 @@ end
 
 local BASE = "https://raw.githubusercontent.com/paporotnicsir/PaporotnicHub/refs/heads/main/"
 local CATALOG_URL = BASE .. "catalog.json"
--- Optional artwork. Leave blank for the fully styled built-in banner and card;
--- no upload is required to avoid empty image regions. Custom uploaded
--- Roblox Images are only a visual overlay, not a dependency.
+-- Layered artwork v0.2.27. Every PNG is an independent file in assets/.
+-- To display artwork in Roblox, use a Roblox uploaded Image ID, OR an executor
+-- with writefile + getcustomasset / getsynasset. Without either, safe GUI fallbacks remain.
+-- These files must ALSO be uploaded to this repository's assets/ directory.
 local PREMIUM_ASSETS = {
-    heroBanner = "",  -- e.g. "rbxassetid://123456789"; optional
-    infiniteYield = "",  -- optional illustration for the IY card
+    heroBanner = "",         -- optional Roblox Image ID: rbxassetid://...
+    infiniteYield = "",      -- the supplied Infinite Yield logo
+    infiniteYieldCard = "",  -- horizontal crop of the very same user image
+    fernLogo = "",           -- isolated fern from our original design mockup
+    fernCorners = "",        -- transparent fern decorations
+    wallpaper = "",          -- subtle atmospheric backdrop
+}
+local LAYERED_FILES = {
+    heroBanner = "featured-banner.png",
+    infiniteYield = "infinite-yield.png",
+    infiniteYieldCard = "infinite-yield-card.png",
+    fernLogo = "fern-logo.png",
+    fernCorners = "fern-corners.png",
+    wallpaper = "dashboard-wallpaper.png",
 }
 local function premiumImageId(value)
+    if type(value)=="number" and value > 0 then return "rbxassetid://"..tostring(math.floor(value)) end
     return type(value)=="string" and value:match("^rbxassetid://%d+$") and value or nil
 end
 
@@ -45,6 +59,9 @@ local FALLBACK = {
             id = "release-020", version = "v0.2.0", name = "Launcher redesign",
             summary = "Larger interface, fern background and a dedicated Releases page.",
             updates = {
+                {version = "v0.2.27", title = "Layered Visual Fix",
+                  body = "Manually separated fern artwork, exact user-provided Infinite Yield image, one real Game Library entry, and properly spaced script buttons. Added optional executor-side image loading.",
+                  bodyRu = "Отдельные слои папоротника, точная картинка Infinite Yield от пользователя, одна настоящая игра в библиотеке и нормальные отступы между кнопками. Добавлена загрузка графики в поддерживаемых исполнителях."},
                 {version = "v0.2.26", title = "Clean Dashboard Rework",
                   body = "Replaced the faux fern icon with a clean monogram, redesigned empty image areas as built-in premium graphics, reduced border clutter and improved layout readability.",
                   bodyRu = "Вместо неудачного значка — чистая монограмма; вместо пустых картинок — оформленные встроенные баннеры, меньше лишних рамок и лучше читаемость."},
@@ -202,7 +219,7 @@ local strings = {
         releaseSub="Новости и изменения Paporotnic Hub", totalGames="Игр в каталоге", authState="Статус доступа",
         accessPublic="PUBLIC / TEST", accessGranted="Ключ активирован", accessNeed="Ожидает ключ",
         patches="ПОДОБНОВЛЕНИЙ", expandedHint="Нажми на релиз, чтобы увидеть изменения",
-        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.26",
+        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.27",
         themeHeading="ТЕМА ОФОРМЛЕНИЯ", themeHint="Изменения применяются сразу. Сохранение работает, если исполнитель поддерживает запись файлов.",
         themeForest="ЛЕСНАЯ", themeOcean="НОЧНОЙ ОКЕАН", themeEmber="ЗАКАТ", themeViolet="ФИОЛЕТОВАЯ", themeActive="ВЫБРАНО",
          gateSubtitle="Для доступа к хабу требуется ключ", gateIdle="Введите ключ для продолжения.",
@@ -269,7 +286,7 @@ local strings = {
         releaseSub="News and changes for Paporotnic Hub", totalGames="Games in catalog", authState="Access status",
         accessPublic="PUBLIC / TEST", accessGranted="Key activated", accessNeed="Awaiting key",
         patches="PATCHES", expandedHint="Click a release to view its updates",
-        releaseBuild="LAUNCHER BUILD: v0.2.26",
+        releaseBuild="LAUNCHER BUILD: v0.2.27",
         themeHeading="COLOR THEME", themeHint="Themes apply instantly. Saving needs executor file access.",
         themeForest="FOREST", themeOcean="NIGHT OCEAN", themeEmber="SUNSET", themeViolet="VIOLET", themeActive="ACTIVE",
          gateSubtitle="An access key is required to continue", gateIdle="Enter your key to continue.",
@@ -472,6 +489,65 @@ local function create(class, props, parent)
     if tracked then themeBindings[x]=tracked end
     return x
 end
+-- Executor-local image bridge. Roblox ImageLabel cannot read PNG bytes directly.
+-- We only download pictures from our own static repo, never code here.
+-- Fail gracefully if an executor does not provide the necessary APIs.
+local graphicCache, graphicWaiters, graphicBusy = {}, {}, {}
+local customAssetFn = (type(getcustomasset)=="function" and getcustomasset)
+    or (type(getsynasset)=="function" and getsynasset)
+    or (type(global.getcustomasset)=="function" and global.getcustomasset)
+    or (type(global.getsynasset)=="function" and global.getsynasset)
+
+local function resolveLayeredImage(key)
+    local direct = premiumImageId(PREMIUM_ASSETS[key])
+    if direct then return direct end
+    local fileName = LAYERED_FILES[key]
+    if not fileName or type(customAssetFn)~="function" then return nil end
+    local filePath = "PaporotnicHub/art_v027_" .. fileName
+    local existing = false
+    if type(isfile)=="function" then
+        local ok,result = pcall(isfile,filePath)
+        existing = ok and result == true
+    elseif type(readfile)=="function" then
+        local ok,result=pcall(readfile,filePath)
+        existing = ok and type(result)=="string" and #result>8
+    end
+    if not existing and type(writefile)=="function" then
+        local downloaded,body=pcall(function()
+            return game:HttpGet(BASE.."assets/"..fileName)
+        end)
+        if downloaded and type(body)=="string" and #body>64 and #body<3000000
+            and body:sub(1,8)=="\137PNG\r\n\26\n" then
+            if type(makefolder)=="function" then pcall(makefolder,"PaporotnicHub") end
+            local written=pcall(writefile,filePath,body)
+            existing=written
+        end
+    end
+    if not existing then return nil end
+    local ok,asset=pcall(customAssetFn,filePath)
+    if ok and type(asset)=="string" and #asset>0 then return asset end
+    return nil
+end
+local function attachLayer(image,key)
+    local direct=premiumImageId(PREMIUM_ASSETS[key])
+    if direct then image.Image=direct; return end
+    if graphicCache[key] then image.Image=graphicCache[key]; return end
+    if graphicCache[key]==false then return end
+    graphicWaiters[key]=graphicWaiters[key] or {}
+    table.insert(graphicWaiters[key],image)
+    if graphicBusy[key] then return end
+    graphicBusy[key]=true
+    task.spawn(function()
+        local asset=resolveLayeredImage(key)
+        graphicCache[key]=asset or false
+        for _,target in ipairs(graphicWaiters[key] or {}) do
+            if target and target.Parent and asset then target.Image=asset end
+        end
+        graphicWaiters[key]=nil
+        graphicBusy[key]=nil
+    end)
+end
+
 local function setTheme(name)
     if not themes[name] or name==themeName then return end
     themeName=name
@@ -793,7 +869,7 @@ local function renderHome()
     clearPage()
     local function L(ru,en) return lang=="ru" and ru or en end
 
-    -- v0.2.26: no artwork is required for the dashboard to look complete.
+    -- v0.2.27: layered artwork with a complete graphical fallback for the dashboard to look complete.
     -- ImageLabels overlay an actual styled surface, so missing or restricted
     -- Roblox thumbnails never produce empty black hero/tiles.
     local function block(parent, pos, size, color, radius)
@@ -909,7 +985,7 @@ local function renderHome()
     local innerRing=block(artPanel,UDim2.new(.53,-55,.48,-55),UDim2.fromOffset(110,110),palette.panel,55)
     innerRing.BackgroundTransparency=0.22
     create("UIStroke",{Color=palette.highlight,Thickness=1.5,Transparency=0.35},innerRing)
-    local emblem=textAt(innerRing,"P",58,palette.highlight,0,17,110,75,true)
+    local emblem=textAt(innerRing,"◆",39,palette.highlight,0,24,110,61,true)
     emblem.TextXAlignment=Enum.TextXAlignment.Center
     textAt(artPanel,"MODULE  /  01",10,palette.text,16,15,205,21,true).TextTransparency=0.22
     textAt(artPanel,"PAPOROTNIC",11,palette.text,18,205,230,18,true).TextTransparency=0.48
@@ -921,6 +997,13 @@ local function renderHome()
     end
     local optionalArt=imageOverlay(artPanel,currentImage)
     if optionalArt then optionalArt.ImageTransparency=0.16 end
+    -- Real layered hero art sourced from the original mockup, independent of UI buttons.
+    local featuredArtwork=create("ImageLabel",{
+        Name="FeaturedArtwork",Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
+        BorderSizePixel=0,Image="",ImageTransparency=0.04,
+        ScaleType=Enum.ScaleType.Crop
+    },hero)
+    attachLayer(featuredArtwork,"heroBanner")
     -- Dark left mask keeps copy legible even with a bright user-supplied art.
     local textBackdrop=block(hero,UDim2.fromOffset(0,0),UDim2.new(.67,0,1,0),palette.background,0)
     textBackdrop.BackgroundTransparency=0.08
@@ -954,18 +1037,16 @@ local function renderHome()
         or L("● В КАТАЛОГЕ","● CATALOG")) or "—",9,palette.highlight,9,16,107,14,true)
 
     section(scroll,"БИБЛИОТЕКА ИГР","GAME LIBRARY","games","games")
-    local gallery=block(scroll,nil,UDim2.new(1,-4,0,153),palette.background,0)
+    local gameRows=math.max(1,math.ceil(#games/4))
+    local gallery=block(scroll,nil,UDim2.new(1,-4,0,gameRows*157),palette.background,0)
     gallery.BackgroundTransparency=1
-    local quickLinks={
-        {name=L("ИНСТРУМЕНТЫ","Universal Tools"),sub=L("Все скрипты","Browse scripts"),initial="U",tab="games",category="universal"},
-        {name=L("ИСТОРИЯ ВЕРСИЙ","Latest Updates"),sub=L("Что нового","Patch notes"),initial="N",tab="releases"},
-        {name=L("НАСТРОЙКИ","Themes & Settings"),sub=L("Персонализация","Customize"),initial="S",tab="settings"},
-        {name=L("ВСЕ ИГРЫ","More Games"),sub=L("Открыть каталог","Explore catalog"),initial="G",tab="games",category="games"},
-    }
-    for i=1,4 do
-        local tile=block(gallery,UDim2.new((i-1)/4,(i-1)*3,0,0),
-            UDim2.new(.25,-10,1,-2),palette.panel,12)
-        thinBorder(tile,i==1 and palette.highlight or palette.border,i==1 and 0.54 or 0.72)
+    -- Only real catalog games. No fake Universal Tools / Updates / Settings tiles.
+    for i,item in ipairs(games) do
+        local col=(i-1)%4
+        local rowIndex=math.floor((i-1)/4)
+        local tile=block(gallery,UDim2.new(col*.25,col*3,0,rowIndex*157),
+            UDim2.new(.25,-10,0,151),palette.panel,12)
+        thinBorder(tile,palette.highlight,.50)
         local cover=block(tile,UDim2.fromOffset(0,0),UDim2.new(1,0,0,98),palette.card,0)
         create("UIGradient",{Rotation=35,Color=ColorSequence.new({
             ColorSequenceKeypoint.new(0,palette.card),
@@ -973,79 +1054,50 @@ local function renderHome()
             ColorSequenceKeypoint.new(1,palette.background)
         })},cover)
         local graphic=block(cover,UDim2.new(.5,-36,.5,-36),UDim2.fromOffset(72,72),palette.highlight,36)
-        graphic.BackgroundTransparency=0.90
-        create("UIStroke",{Color=palette.highlight,Thickness=2,Transparency=0.66},graphic)
-        local item=games[i]
-        if item then
-            local abbrev=tostring(item.title or "G"):sub(1,1):upper()
-            local letter=textAt(graphic,abbrev,29,palette.highlight,0,12,72,48,true)
-            letter.TextXAlignment=Enum.TextXAlignment.Center
-            if tonumber(item.universeId) then
-                imageOverlay(cover,"rbxthumb://type=GameIcon&id="..tostring(item.universeId).."&w=420&h=420")
-            end
-            local title=textAt(tile,tostring(item.title or "Game"),12,palette.text,10,102,156,28,true)
-            title.Size=UDim2.new(1,-20,0,27)
-            local state=(item.id==lastLaunchedGameId and L("● НЕДАВНО","● RECENT") or
-                (isSupported(item) and L("● ТЕКУЩАЯ ИГРА","● CURRENT PLACE") or L("● В КАТАЛОГЕ","● IN CATALOG")))
-            local status=textAt(tile,state,9,palette.highlight,10,132,154,16,true)
-            status.Size=UDim2.new(1,-20,0,16)
-            local tap=create("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1)},tile)
-            connect(tap.MouseButton1Click,function() navigateTo("games","games") end)
-        else
-            local q=quickLinks[((i-#games-1)%#quickLinks)+1]
-            local letter=textAt(graphic,q.initial,29,palette.highlight,0,12,72,48,true)
-            letter.TextXAlignment=Enum.TextXAlignment.Center
-            local title=textAt(tile,q.name,12,palette.text,10,102,159,29,true)
-            title.Size=UDim2.new(1,-20,0,28)
-            local sub=textAt(tile,q.sub,9,palette.muted,10,132,156,16,false)
-            sub.Size=UDim2.new(1,-20,0,16)
-            local tap=create("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1)},tile)
-            connect(tap.MouseButton1Click,function() navigateTo(q.tab,q.category) end)
+        graphic.BackgroundTransparency=.90
+        create("UIStroke",{Color=palette.highlight,Thickness=2,Transparency=.66},graphic)
+        local letter=textAt(graphic,tostring(item.title or "G"):sub(1,1):upper(),29,
+            palette.highlight,0,12,72,48,true)
+        letter.TextXAlignment=Enum.TextXAlignment.Center
+        if tonumber(item.universeId) then
+            imageOverlay(cover,"rbxthumb://type=GameIcon&id="..tostring(item.universeId).."&w=420&h=420")
         end
+        local itemTitle=textAt(tile,tostring(item.title or "Game"),12,palette.text,10,102,156,28,true)
+        itemTitle.Size=UDim2.new(1,-20,0,27)
+        local state=(item.id==lastLaunchedGameId and L("● НЕДАВНО","● RECENT") or
+            (isSupported(item) and L("● ТЕКУЩАЯ ИГРА","● CURRENT PLACE") or L("● В КАТАЛОГЕ","● IN CATALOG")))
+        local gameStatus=textAt(tile,state,9,palette.highlight,10,132,154,16,true)
+        gameStatus.Size=UDim2.new(1,-20,0,16)
+        local tap=create("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1)},tile)
+        connect(tap.MouseButton1Click,function() navigateTo("games","games") end)
+    end
+    if #games==0 then
+        textAt(gallery,L("Игры скоро появятся","Games coming soon"),14,palette.muted,14,28,450,34,false)
     end
 
     section(scroll,"УНИВЕРСАЛЬНЫЕ СКРИПТЫ","UNIVERSAL SCRIPTS","games","universal")
     local utils=block(scroll,nil,UDim2.new(1,-4,0,171),palette.background,0)
     utils.BackgroundTransparency=1
-    for i=1,4 do
-        local tile=block(utils,UDim2.new((i-1)/4,(i-1)*3,0,0),UDim2.new(.25,-10,1,-2),palette.panel,12)
-        thinBorder(tile,i==1 and palette.highlight or palette.border,i==1 and .38 or .74)
-        if i==1 then
-            local banner=block(tile,UDim2.fromOffset(0,0),UDim2.new(1,0,0,100),Color3.fromRGB(31,16,53),0)
-            create("UIGradient",{Rotation=28,Color=ColorSequence.new({
-                ColorSequenceKeypoint.new(0,Color3.fromRGB(28,17,47)),
-                ColorSequenceKeypoint.new(.6,Color3.fromRGB(64,28,99)),
-                ColorSequenceKeypoint.new(1,Color3.fromRGB(102,44,145))
-            })},banner)
-            local ray=block(banner,UDim2.new(.5,-47,.5,-47),UDim2.fromOffset(94,94),Color3.fromRGB(203,146,255),47)
-            ray.BackgroundTransparency=.92
-            create("UIStroke",{Color=Color3.fromRGB(197,143,255),Thickness=2.4,Transparency=.30},ray)
-            local iy=textAt(banner,"IY",40,Color3.fromRGB(229,195,255),0,21,165,56,true)
-            iy.Size=UDim2.new(1,0,0,56)
-            iy.TextXAlignment=Enum.TextXAlignment.Center
-            if premiumImageId(PREMIUM_ASSETS.infiniteYield) then
-                imageOverlay(banner,PREMIUM_ASSETS.infiniteYield)
-            end
-            local name=textAt(tile,"Infinite Yield",13,palette.text,10,107,165,21,true)
-            name.Size=UDim2.new(1,-20,0,22)
-            local sub=textAt(tile,L("Админ-команды и утилиты","Admin commands & utilities"),10,palette.muted,10,128,164,27,false)
-            sub.Size=UDim2.new(1,-20,0,26)
-            local badge=block(tile,UDim2.fromOffset(10,155),UDim2.fromOffset(85,14),palette.highlight,5)
-            textAt(badge,"UNIVERSAL",9,palette.background,8,0,77,14,true)
-            local tap=create("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1)},tile)
-            connect(tap.MouseButton1Click,function() navigateTo("games","universal") end)
-        else
-            local symbol={"+","+","+"}
-            local future=block(tile,UDim2.new(.5,-34,0,24),UDim2.fromOffset(68,68),palette.card,34)
-            create("UIStroke",{Color=palette.border,Thickness=1,Transparency=.58},future)
-            local sign=textAt(future,symbol[i-1] or "+",29,palette.muted,0,9,68,49,true)
-            sign.TextXAlignment=Enum.TextXAlignment.Center
-            local soon=textAt(tile,L("СКОРО","COMING SOON"),11,palette.text,9,113,157,24,true)
-            soon.Size=UDim2.new(1,-18,0,24)
-            local sub=textAt(tile,L("Новые инструменты","More utilities soon"),9,palette.muted,9,140,160,18,false)
-            sub.Size=UDim2.new(1,-18,0,18)
-        end
-    end
+    local tile=block(utils,UDim2.fromOffset(0,0),UDim2.new(.25,-10,1,-2),palette.panel,12)
+    thinBorder(tile,palette.highlight,.35)
+    local banner=block(tile,UDim2.fromOffset(0,0),UDim2.new(1,0,0,100),Color3.fromRGB(25,23,27),0)
+    local iyFallback=textAt(banner,"INFINITE YIELD",17,Color3.fromRGB(240,240,240),7,27,170,46,true)
+    iyFallback.Size=UDim2.new(1,-14,0,46)
+    iyFallback.TextXAlignment=Enum.TextXAlignment.Center
+    -- The user's own Infinite Yield image is the *only* image source for this card.
+    local iyImage=create("ImageLabel",{
+        Name="UserInfiniteYieldArtwork",Size=UDim2.fromScale(1,1),
+        BackgroundTransparency=1,BorderSizePixel=0,Image="",ScaleType=Enum.ScaleType.Crop
+    },banner)
+    attachLayer(iyImage,"infiniteYieldCard")
+    local name=textAt(tile,"Infinite Yield",13,palette.text,10,107,165,21,true)
+    name.Size=UDim2.new(1,-20,0,22)
+    local sub=textAt(tile,L("Админ-команды и утилиты","Admin commands & utilities"),10,palette.muted,10,128,164,27,false)
+    sub.Size=UDim2.new(1,-20,0,26)
+    local badge=block(tile,UDim2.fromOffset(10,155),UDim2.fromOffset(85,14),palette.highlight,5)
+    textAt(badge,"UNIVERSAL",9,palette.background,8,0,77,14,true)
+    local tap=create("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1)},tile)
+    connect(tap.MouseButton1Click,function() navigateTo("games","universal") end)
     if not catalogOk then
         local note=txt(scroll,T("offline"),10,palette.alert,24)
         note.Size=UDim2.new(1,-8,0,24)
@@ -1142,6 +1194,12 @@ local function renderUniversalScripts(panel)
     local iconText=txt(iconHolder,"IY",29,palette.highlight,56,Enum.TextXAlignment.Center)
     iconText.Font=Enum.Font.GothamBold
     iconText.Position=UDim2.fromOffset(0,15)
+    local iconArtwork=create("ImageLabel",{
+        Name="InfiniteYieldOriginalLogo",Position=UDim2.fromOffset(0,0),
+        Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
+        BorderSizePixel=0,Image="",ScaleType=Enum.ScaleType.Fit
+    },iconHolder)
+    attachLayer(iconArtwork,"infiniteYield")
     local title=txt(row,"Infinite Yield",21,palette.text,30)
     title.Font=Enum.Font.GothamBold
     title.Position=UDim2.fromOffset(106,3)
@@ -1179,7 +1237,7 @@ local function renderGames()
         renderGames()
     end,scriptCategory=="universal")
     universalTab.Name="UniversalScriptsTab"
-    universalTab.Position=UDim2.fromOffset(232,0)
+    universalTab.Position=UDim2.fromOffset(246,0)
     local panel=create("Frame",{
         Position=UDim2.fromOffset(0,58),
         Size=UDim2.new(1,0,1,-58), BackgroundTransparency=1
@@ -1450,7 +1508,7 @@ screen=create("ScreenGui",{Name="PaporotnicUniversalLauncher",ResetOnSpawn=false
 -- Responsive premium desktop layout. The screenshot uses a 1.77 aspect ratio;
 -- UIScale keeps it visible on 1366x768 and downscales on smaller viewports.
 root=create("CanvasGroup",{
-    Name="PremiumDashboardWindow",AnchorPoint=Vector2.new(0.5,0.5),
+    Name="LayeredDashboardWindow",AnchorPoint=Vector2.new(0.5,0.5),
     Position=UDim2.fromScale(.5,.5),Size=UDim2.fromOffset(1332,754),
     Active=true,Visible=false,BackgroundColor3=palette.background,
     BorderSizePixel=0,ClipsDescendants=true,GroupTransparency=1},screen)
@@ -1467,29 +1525,38 @@ if workspace.CurrentCamera then
     connect(workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"),fitPremiumWindow)
 end
 
+-- First visual layer: true graphic wallpaper. All controls are separate GUI elements.
+local dashboardWallpaper=create("ImageLabel",{
+    Name="LayeredForestBackground",Position=UDim2.fromScale(0,0),Size=UDim2.fromScale(1,1),
+    BackgroundTransparency=1,BorderSizePixel=0,Image="",ImageTransparency=.69,
+    ScaleType=Enum.ScaleType.Crop
+},root)
+attachLayer(dashboardWallpaper,"wallpaper")
+
 local top=create("Frame",{Size=UDim2.new(1,0,0,77),Active=true,
     BackgroundColor3=palette.background,BorderSizePixel=0},root)
 -- Fine green bottom accent, mirroring the reference's lime header line.
 create("Frame",{Position=UDim2.fromOffset(0,75),Size=UDim2.new(1,0,0,2),
     BackgroundColor3=palette.border,BorderSizePixel=0},top)
--- Brand mark v0.2.26: single clean P monogram instead of many rotated
--- tiny leaf rectangles (those looked broken at common UIScale values).
+-- Actual fern icon, manually extracted from the visual reference (not a faux P).
 local brandMark=create("Frame",{
-    Name="BrandMark",Position=UDim2.fromOffset(21,17),
-    Size=UDim2.fromOffset(42,42),BackgroundColor3=palette.highlight,
-    BorderSizePixel=0
+    Name="BrandMark",Position=UDim2.fromOffset(21,13),
+    Size=UDim2.fromOffset(48,48),BackgroundColor3=palette.background,
+    BackgroundTransparency=1,BorderSizePixel=0
 },top)
-corner(brandMark,11)
-local brandGlyph=txt(brandMark,"P",29,palette.background,42,Enum.TextXAlignment.Center)
-brandGlyph.Font=Enum.Font.GothamBold
-brandGlyph.Position=UDim2.fromOffset(0,-1)
-brandGlyph.Size=UDim2.fromOffset(42,42)
+local brandFallback=txt(brandMark,"",25,palette.highlight,48,Enum.TextXAlignment.Center)
+brandFallback.Font=Enum.Font.GothamBold
+local brandFern=create("ImageLabel",{
+    Name="RealFernLogo",Position=UDim2.fromOffset(0,0),Size=UDim2.fromScale(1,1),
+    BackgroundTransparency=1,BorderSizePixel=0,Image="",ScaleType=Enum.ScaleType.Fit
+},brandMark)
+attachLayer(brandFern,"fernLogo")
 titleLabel=txt(top,"Paporotnic Hub",24,palette.text,37)
 titleLabel.Font=Enum.Font.GothamBold
-titleLabel.Position=UDim2.fromOffset(67,10)
-titleLabel.Size=UDim2.fromOffset(255,38)
+titleLabel.Position=UDim2.fromOffset(77,10)
+titleLabel.Size=UDim2.fromOffset(244,38)
 local subtitle=txt(top,"ROBLOX SCRIPT PLATFORM",10,palette.muted,20)
-subtitle.Position=UDim2.fromOffset(69,47)
+subtitle.Position=UDim2.fromOffset(79,47)
 subtitle.Size=UDim2.fromOffset(239,19)
 local accentLine=create("Frame",{Position=UDim2.fromOffset(0,75),
     Size=UDim2.fromOffset(238,2),BackgroundColor3=palette.highlight,BorderSizePixel=0},top)
@@ -1508,7 +1575,7 @@ local function headerChip(textValue,x,w)
 end
 local stateChip,stateText=headerChip("●  ACCESS VERIFIED",326,170)
 local apiChip,apiText=headerChip("KEY SYSTEM",510,139)
-local buildChip,buildText=headerChip("HUB  v0.2.26",663,150)
+local buildChip,buildText=headerChip("HUB  v0.2.27",663,150)
 
 local profile=create("Frame",{Position=UDim2.new(1,-333,0,9),Size=UDim2.fromOffset(189,58),
     BackgroundColor3=palette.panel,BorderSizePixel=0},top)
@@ -1543,6 +1610,14 @@ local sidebar=create("Frame",{
     BorderSizePixel=0},root)
 create("Frame",{Position=UDim2.new(1,-1,0,0),Size=UDim2.new(0,1,1,0),
     BackgroundColor3=palette.border,BorderSizePixel=0},sidebar)
+sidebar.ClipsDescendants=true
+local cornerFerns=create("ImageLabel",{
+    Name="LayeredFernCornerDecor",Position=UDim2.fromOffset(0,-77),
+    Size=UDim2.fromOffset(1332,750),BackgroundTransparency=1,
+    BorderSizePixel=0,Image="",ImageTransparency=.06,
+    ScaleType=Enum.ScaleType.Stretch
+},sidebar)
+attachLayer(cornerFerns,"fernCorners")
 local sideAccent=create("Frame",{Position=UDim2.fromOffset(0,0),Size=UDim2.fromOffset(4,332),
     BorderSizePixel=0,BackgroundColor3=palette.highlight,BackgroundTransparency=0.88},sidebar)
 create("UIGradient",{Rotation=90,Transparency=NumberSequence.new({
@@ -1557,12 +1632,12 @@ local navOptions={
     {"settings",nil,"  ","settings"}
 }
 local scriptsGroup=txt(sidebar,"SCRIPTS",11,palette.muted,25)
-scriptsGroup.Position=UDim2.fromOffset(26,138)
+scriptsGroup.Position=UDim2.fromOffset(26,140)
 scriptsGroup.Size=UDim2.fromOffset(164,25)
 scriptsGroup.Font=Enum.Font.GothamBold
 for i,row in ipairs(navOptions) do
     local page,category,icon,labelKey=row[1],row[2],row[3],row[4]
-    local positions={22,80,172,213,279,331}
+    local positions={22,80,177,236,305,363}
     local y=positions[i]
     local nav=button(sidebar,icon..T(labelKey),197,i==1 and 48 or 42,function()
         navigateTo(page,category)
@@ -1577,7 +1652,7 @@ for i,row in ipairs(navOptions) do
     -- conventional navigation entry while the subtab highlights the category.
     table.insert(sidebarButtons,{button=nav,page=page,category=category,prefix=icon,labelKey=labelKey})
 end
-local separator=create("Frame",{Position=UDim2.fromOffset(14,391),Size=UDim2.fromOffset(194,1),
+local separator=create("Frame",{Position=UDim2.fromOffset(14,419),Size=UDim2.fromOffset(194,1),
     BackgroundColor3=palette.border,BorderSizePixel=0},sidebar)
 
 local accessSection=create("Frame",{
@@ -1693,6 +1768,7 @@ renderRightRail=function()
     rrLabel(updates,"↻  "..L("Обновления","Latest Updates"),15,palette.text,13,8,250,28,true)
     local recent={
         {"v0.2.26",L("Чистый интерфейс","Clean Rework")},
+        {"v0.2.27",L("Layered Visual Fix","Layered Visual Fix")},
         {"v0.2.25",L("Premium Dashboard","Premium Dashboard")},
         {"v0.2.24",L("Главная страница","Home Foundation")},
         {"v0.2.23",L("Universal Scripts","Universal Scripts")},
