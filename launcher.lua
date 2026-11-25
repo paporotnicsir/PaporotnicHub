@@ -1,4 +1,4 @@
--- PAPOROTNIC HUB | universal launcher v0.2.19
+-- PAPOROTNIC HUB | universal launcher v0.2.20
 -- 3-second loading gate, key-only entry, and quiet accent-glow interface.
 -- Based on the user's v0.2.14 launcher; auth API and game module flow preserved.
 
@@ -19,7 +19,7 @@ end
 local BASE = "https://raw.githubusercontent.com/paporotnicsir/PaporotnicHub/refs/heads/main/"
 local CATALOG_URL = BASE .. "catalog.json"
 local FALLBACK = {
-    version = "0.2.19 (offline catalog)",
+    version = "0.2.20 (offline catalog)",
     latestVersion = "Paporotnic Hub Core v0.2.8",
     lifetimePrice = "$ ?? / TBA",
     announcement = "Welcome, LIL Paporotnics! The universal hub is online.",
@@ -34,6 +34,9 @@ local FALLBACK = {
             id = "release-020", version = "v0.2.0", name = "Launcher redesign",
             summary = "Larger interface, fern background and a dedicated Releases page.",
             updates = {
+                {version = "v0.2.20", title = "Switch Key in launcher",
+                  body = "Change access keys from the main hub without restarting or revoking a license.",
+                  bodyRu = "Смена ключа прямо из хаба без перезапуска и блокировки лицензии."},
                 {version = "v0.2.18", title = "Clean background restored",
                   body = "Removed the experimental fern border. The launcher uses a clean background and ambient panel glow.",
                   bodyRu = "Экспериментальная кайма из папоротников убрана. Возвращён чистый фон с мягкой подсветкой панелей."},
@@ -112,6 +115,8 @@ local strings = {
     ru = {
         searchHint="Поиск игры...", noSearchResults="Игры по запросу не найдены",
         home="ГЛАВНАЯ", games="ИГРЫ", releases="РЕЛИЗЫ", settings="НАСТРОЙКИ", title="PAPOROTNIC HUB",
+        switchKey="СМЕНИТЬ КЛЮЧ", switchReady="Введи другой ключ. Старый ключ остаётся действительным.",
+        switchBusy="Дождись завершения проверки ключа.",
         welcome="Welcome, LIL Paporotnics!", heroSub="One hub for your scripts, updates, and supported games.",
         status="АКТУАЛЬНАЯ ВЕРСИЯ", price="LIFETIME-КЛЮЧ", news="НОВОСТИ", login="АКТИВАЦИЯ",
         key="Введите ключ доступа", enter="АКТИВИРОВАТЬ", noBackend="Тестовый режим: ключи пока не включены.",
@@ -128,7 +133,7 @@ local strings = {
         releaseSub="Новости и изменения Paporotnic Hub", totalGames="Игр в каталоге", authState="Статус доступа",
         accessPublic="PUBLIC / TEST", accessGranted="Ключ активирован", accessNeed="Ожидает ключ",
         patches="ПОДОБНОВЛЕНИЙ", expandedHint="Нажми на релиз, чтобы увидеть изменения",
-        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.19 (TEST)",
+        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.20 (TEST)",
         themeHeading="ТЕМА ОФОРМЛЕНИЯ", themeHint="Изменения применяются сразу. Сохранение работает, если исполнитель поддерживает запись файлов.",
         themeForest="ЛЕСНАЯ", themeOcean="НОЧНОЙ ОКЕАН", themeEmber="ЗАКАТ", themeViolet="ФИОЛЕТОВАЯ", themeActive="ВЫБРАНО",
          gateSubtitle="Для доступа к хабу требуется ключ", gateIdle="Введите ключ для продолжения.",
@@ -137,6 +142,8 @@ local strings = {
     en = {
         searchHint="Search games...", noSearchResults="No matching games",
         home="HOME", games="GAMES", releases="RELEASES", settings="SETTINGS", title="PAPOROTNIC HUB",
+        switchKey="SWITCH KEY", switchReady="Enter another key. Your previous key stays valid.",
+        switchBusy="Wait until verification finishes.",
         welcome="Welcome, LIL Paporotnics!", heroSub="One hub for your scripts, updates, and supported games.",
         status="LATEST VERSION", price="LIFETIME KEY", news="ANNOUNCEMENTS", login="ACTIVATION",
         key="Enter access key", enter="ACTIVATE", noBackend="Preview access: keys are not enabled yet.",
@@ -153,7 +160,7 @@ local strings = {
         releaseSub="News and changes for Paporotnic Hub", totalGames="Games in catalog", authState="Access status",
         accessPublic="PUBLIC / TEST", accessGranted="Key activated", accessNeed="Awaiting key",
         patches="PATCHES", expandedHint="Click a release to view its updates",
-        releaseBuild="LAUNCHER BUILD: v0.2.19 (TEST)",
+        releaseBuild="LAUNCHER BUILD: v0.2.20 (TEST)",
         themeHeading="COLOR THEME", themeHint="Themes apply instantly. Saving needs executor file access.",
         themeForest="FOREST", themeOcean="NIGHT OCEAN", themeEmber="SUNSET", themeViolet="VIOLET", themeActive="ACTIVE",
          gateSubtitle="An access key is required to continue", gateIdle="Enter your key to continue.",
@@ -230,6 +237,9 @@ local selectedTab = "home"
 local statusText = ""
 local uiPhase = "BOOT" -- BOOT / AUTH / UNLOCKING / MAIN
 local verifyingKey = false
+-- Incremented on Switch Key to cancel any in-flight module fetch from a prior session.
+local sessionEpoch = 0
+local returnToAuthGate = nil
 local authStatusLabel, authSubmitButton, authInput
 local screen, root, content, statusLabel, titleLabel, footerLabel
 
@@ -437,6 +447,7 @@ end
 
 local function launch(row)
     if verifyingKey then return end
+    local launchEpoch = sessionEpoch
     if not authenticated or type(approvedKey) ~= "string" then info(T("unauth"),true); return end
     if not isSupported(row) then info(T("unsupported"),true); return end
     if row.enabled == false then info(T("unavailable"),true); return end
@@ -445,17 +456,20 @@ local function launch(row)
     -- Check the key again immediately before loading a game module.
     -- A key revoked/expired since the initial activation must be rejected.
     verifyKey(approvedKey, function()
-        if not alive or not authenticated then return end
+        if not alive or launchEpoch ~= sessionEpoch or not authenticated then return end
         info(T("loading"))
         task.spawn(function()
             local fetched, code = pcall(function() return game:HttpGet(row.script) end)
-            if not alive then return end
+            if not alive or launchEpoch ~= sessionEpoch or not authenticated then return end
             if not fetched or type(code)~="string" then info(T("loadFail")..tostring(code),true); return end
             if type(loadstring)~="function" then info(T("loadFail").."loadstring unavailable",true); return end
             local buildOK, fn = pcall(function() return loadstring(code) end)
             if not buildOK or type(fn)~="function" then info(T("loadFail")..tostring(fn),true); return end
+            -- Lua cannot terminate a module already running, but a pending
+            -- network fetch must never start a module after Switch Key.
+            if launchEpoch ~= sessionEpoch or not authenticated then return end
             local launched,err=pcall(fn)
-            if not alive then return end
+            if not alive or launchEpoch ~= sessionEpoch then return end
             if launched then info(T("loaded")); screen.Enabled=false else info(T("loadFail")..tostring(err),true) end
         end)
     end)
@@ -718,6 +732,7 @@ local function renderSettings()
         savePreferences()
         if titleLabel then titleLabel.Text=T("title") end
         if footerLabel then footerLabel.Text=T("footer") end
+        if switchKeyButton then switchKeyButton.Text=T("switchKey") end
         task.defer(function() if alive then render() end end)
     end,false)
     b.Position=UDim2.fromOffset(0,53)
@@ -796,7 +811,14 @@ corner(top,16)
 titleLabel=txt(top,T("title"),22,palette.highlight,56)
 titleLabel.Font=Enum.Font.GothamBold
 titleLabel.Position=UDim2.fromOffset(18,2)
-titleLabel.Size=UDim2.new(1,-120,0,56)
+titleLabel.Size=UDim2.new(1,-260,0,56)
+-- Always visible after authorization: intended for testers AND regular users.
+local switchKeyButton=button(top,T("switchKey"),124,36,function()
+    if type(returnToAuthGate)=="function" then returnToAuthGate() end
+end,false)
+switchKeyButton.Name="SwitchKeyButton"
+switchKeyButton.TextSize=11
+switchKeyButton.Position=UDim2.new(1,-220,0,12)
 local collapse=button(top,"—",36,36,function() screen.Enabled=not screen.Enabled end)
 collapse.Position=UDim2.new(1,-84,0,12)
 local settings=button(top,"⚙",36,36,function() selectedTab="settings"; render() end)
@@ -845,6 +867,9 @@ local introBlur = nil
 local function stop()
     if not alive then return end
     alive=false
+    returnToAuthGate=nil
+    authenticated=false
+    approvedKey=nil
     if introBlur then
         pcall(function() introBlur:Destroy() end)
         introBlur = nil
@@ -1054,7 +1079,7 @@ local function playLaunchIntro()
 
     local function revealMain()
         if not alive or uiPhase~="UNLOCKING" or not overlay.Parent then return end
-        uiPhase="MAIN"
+        -- Keep UNLOCKING until the UI transition has completed.
         root.Visible=true
         -- Keep the main window at its original 980 x 720 size, but reveal it
         -- only after successful server authorization.
@@ -1078,13 +1103,60 @@ local function playLaunchIntro()
         TweenService:Create(rootStroke,TweenInfo.new(0.24,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{
             Transparency=0
         }):Play()
-        if overlay.Parent then overlay:Destroy() end
-        authStatusLabel=nil
-        authSubmitButton=nil
-        authInput=nil
+        -- Preserve the activation gate for Switch Key (no 3-second boot again).
+        -- Hiding the whole overlay removes its click surface from the hub.
+        if overlay.Parent then overlay.Visible=false end
         if introBlur==blur then
-            blur:Destroy()
-            introBlur=nil
+            blur.Size=0
+            blur.Enabled=false
+        end
+        uiPhase="MAIN"
+    end
+
+    -- Return to the ORIGINAL access gate without reloading remote code.
+    -- There is no local remember-me cache in this build: all new keys go
+    -- through the existing VPS verification endpoint, including HWID checks.
+    returnToAuthGate = function()
+        if not alive or uiPhase~="MAIN" then return end
+        if verifyingKey then
+            info(T("switchBusy"),true)
+            return
+        end
+        sessionEpoch = sessionEpoch + 1
+        authenticated=false
+        approvedKey=nil
+        selectedTab="home"
+        statusText=""
+        if statusLabel then statusLabel.Text="" end
+        if authInput then authInput.Text="" end
+        uiPhase="AUTH"
+        if authStatusLabel then
+            authStatusLabel.Text=T("switchReady")
+            authStatusLabel.TextColor3=palette.muted
+        end
+        if authSubmitButton then
+            authSubmitButton.Text=T("enter")
+            authSubmitButton.Active=true
+            authSubmitButton.AutoButtonColor=true
+        end
+
+        -- Fail closed: fully hide the unlocked interface before showing AUTH.
+        root.Visible=false
+        root.GroupTransparency=1
+        rootStroke.Enabled=false
+        overlay.Visible=true
+        overlay.BackgroundTransparency=0.57
+        gate.BackgroundTransparency=0.025
+        glow.BackgroundTransparency=0.975
+        bootBody.Visible=false
+        authBody.Visible=true
+        authBody.GroupTransparency=0
+        if blur.Parent then
+            blur.Size=0
+            blur.Enabled=true
+            TweenService:Create(blur,TweenInfo.new(0.3,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{
+                Size=9
+            }):Play()
         end
     end
 
@@ -1152,4 +1224,4 @@ local function playLaunchIntro()
 end
 
 task.spawn(playLaunchIntro)
-print("[Paporotnic Universal Launcher] v0.2.19 | PlaceId="..tostring(game.PlaceId))
+print("[Paporotnic Universal Launcher] v0.2.20 | PlaceId="..tostring(game.PlaceId))
