@@ -1,4 +1,4 @@
--- PAPOROTNIC HUB | universal launcher v0.2.20
+-- PAPOROTNIC HUB | universal launcher v0.2.21
 -- 3-second loading gate, key-only entry, and quiet accent-glow interface.
 -- Based on the user's v0.2.14 launcher; auth API and game module flow preserved.
 
@@ -19,7 +19,7 @@ end
 local BASE = "https://raw.githubusercontent.com/paporotnicsir/PaporotnicHub/refs/heads/main/"
 local CATALOG_URL = BASE .. "catalog.json"
 local FALLBACK = {
-    version = "0.2.20 (offline catalog)",
+    version = "0.2.21 (offline catalog)",
     latestVersion = "Paporotnic Hub Core v0.2.8",
     lifetimePrice = "$ ?? / TBA",
     announcement = "Welcome, LIL Paporotnics! The universal hub is online.",
@@ -34,6 +34,9 @@ local FALLBACK = {
             id = "release-020", version = "v0.2.0", name = "Launcher redesign",
             summary = "Larger interface, fern background and a dedicated Releases page.",
             updates = {
+                {version = "v0.2.21", title = "Optional Remember Me",
+                  body = "Opt-in local session saving with a fresh server check on every startup. Switch Key clears saved access.",
+                  bodyRu = "Необязательное запоминание ключа с проверкой через сервер при каждом запуске. Switch Key очищает сохранённый доступ."},
                 {version = "v0.2.20", title = "Switch Key in launcher",
                   body = "Change access keys from the main hub without restarting or revoking a license.",
                   bodyRu = "Смена ключа прямо из хаба без перезапуска и блокировки лицензии."},
@@ -117,6 +120,15 @@ local strings = {
         home="ГЛАВНАЯ", games="ИГРЫ", releases="РЕЛИЗЫ", settings="НАСТРОЙКИ", title="PAPOROTNIC HUB",
         switchKey="СМЕНИТЬ КЛЮЧ", switchReady="Введи другой ключ. Старый ключ остаётся действительным.",
         switchBusy="Дождись завершения проверки ключа.",
+        rememberTitle="ЗАПОМНИТЬ МЕНЯ", rememberOn="ЗАПОМИНАНИЕ: ВКЛ", rememberOff="ЗАПОМИНАНИЕ: ВЫКЛ",
+        rememberHint="Сохранять этот ключ и проверять его через сервер при следующем запуске.",
+        rememberWarning="Внимание: ключ хранится в локальном файле без шифрования. Не включай на общем ПК.",
+        rememberEnabled="Ключ сохранён. При следующем запуске проверим его через VPS.",
+        rememberDisabled="Запоминание выключено. Локальный сохранённый ключ очищен.",
+        rememberUnavailable="Исполнитель не поддерживает readfile/writefile. Запоминание недоступно.",
+        rememberSaveError="Не удалось сохранить сессию. Запоминание осталось выключенным.",
+        rememberDeleteError="Не удалось гарантированно удалить локальный ключ. Проверь файлы исполнителя.",
+        rememberChecking="Проверяем сохранённый ключ через сервер...",
         welcome="Welcome, LIL Paporotnics!", heroSub="One hub for your scripts, updates, and supported games.",
         status="АКТУАЛЬНАЯ ВЕРСИЯ", price="LIFETIME-КЛЮЧ", news="НОВОСТИ", login="АКТИВАЦИЯ",
         key="Введите ключ доступа", enter="АКТИВИРОВАТЬ", noBackend="Тестовый режим: ключи пока не включены.",
@@ -133,7 +145,7 @@ local strings = {
         releaseSub="Новости и изменения Paporotnic Hub", totalGames="Игр в каталоге", authState="Статус доступа",
         accessPublic="PUBLIC / TEST", accessGranted="Ключ активирован", accessNeed="Ожидает ключ",
         patches="ПОДОБНОВЛЕНИЙ", expandedHint="Нажми на релиз, чтобы увидеть изменения",
-        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.20 (TEST)",
+        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.21 (TEST)",
         themeHeading="ТЕМА ОФОРМЛЕНИЯ", themeHint="Изменения применяются сразу. Сохранение работает, если исполнитель поддерживает запись файлов.",
         themeForest="ЛЕСНАЯ", themeOcean="НОЧНОЙ ОКЕАН", themeEmber="ЗАКАТ", themeViolet="ФИОЛЕТОВАЯ", themeActive="ВЫБРАНО",
          gateSubtitle="Для доступа к хабу требуется ключ", gateIdle="Введите ключ для продолжения.",
@@ -144,6 +156,15 @@ local strings = {
         home="HOME", games="GAMES", releases="RELEASES", settings="SETTINGS", title="PAPOROTNIC HUB",
         switchKey="SWITCH KEY", switchReady="Enter another key. Your previous key stays valid.",
         switchBusy="Wait until verification finishes.",
+        rememberTitle="REMEMBER ME", rememberOn="REMEMBER ME: ON", rememberOff="REMEMBER ME: OFF",
+        rememberHint="Save this key and verify it with the server on your next launch.",
+        rememberWarning="Warning: the key is saved in an unencrypted local file. Avoid shared computers.",
+        rememberEnabled="Key saved. It will be checked with the VPS at next launch.",
+        rememberDisabled="Remember Me disabled. The locally saved key was cleared.",
+        rememberUnavailable="This executor does not support readfile/writefile. Cannot remember keys.",
+        rememberSaveError="Could not persist your session. Remember Me remains disabled.",
+        rememberDeleteError="Could not fully remove the local key. Check your executor files.",
+        rememberChecking="Checking saved key with server...",
         welcome="Welcome, LIL Paporotnics!", heroSub="One hub for your scripts, updates, and supported games.",
         status="LATEST VERSION", price="LIFETIME KEY", news="ANNOUNCEMENTS", login="ACTIVATION",
         key="Enter access key", enter="ACTIVATE", noBackend="Preview access: keys are not enabled yet.",
@@ -160,7 +181,7 @@ local strings = {
         releaseSub="News and changes for Paporotnic Hub", totalGames="Games in catalog", authState="Access status",
         accessPublic="PUBLIC / TEST", accessGranted="Key activated", accessNeed="Awaiting key",
         patches="PATCHES", expandedHint="Click a release to view its updates",
-        releaseBuild="LAUNCHER BUILD: v0.2.20 (TEST)",
+        releaseBuild="LAUNCHER BUILD: v0.2.21 (TEST)",
         themeHeading="COLOR THEME", themeHint="Themes apply instantly. Saving needs executor file access.",
         themeForest="FOREST", themeOcean="NIGHT OCEAN", themeEmber="SUNSET", themeViolet="VIOLET", themeActive="ACTIVE",
          gateSubtitle="An access key is required to continue", gateIdle="Enter your key to continue.",
@@ -207,6 +228,9 @@ local themes = {
 }
 local themeOrder = {"forest", "ocean", "ember", "violet"}
 local settingsPath = "PaporotnicHub/preferences.json"
+local sessionPath = "PaporotnicHub/session.json"
+local supportsSessionFiles = type(readfile)=="function" and type(writefile)=="function"
+local rememberMe = false -- OFF by default; never save a key before explicit opt-in.
 local themeName = "forest"
 do
     if type(readfile)=="function" then
@@ -216,6 +240,7 @@ do
             if parsed and type(saved)=="table" then
                 if type(saved.theme)=="string" and themes[saved.theme] then themeName=saved.theme end
                 if saved.language=="ru" or saved.language=="en" then lang=saved.language end
+                if saved.rememberMe == true and supportsSessionFiles then rememberMe=true end
             end
         end
     end
@@ -223,10 +248,48 @@ end
 local palette = {}
 for key,color in pairs(themes[themeName]) do palette[key]=color end
 local themeBindings = setmetatable({}, {__mode="k"})
-local function savePreferences()
-    if type(writefile)~="function" then return end
+local function ensureDataFolder()
     if type(makefolder)=="function" then pcall(makefolder,"PaporotnicHub") end
-    pcall(writefile, settingsPath, HttpService:JSONEncode({theme=themeName,language=lang}))
+end
+local function savePreferences()
+    if type(writefile)~="function" then return false end
+    ensureDataFolder()
+    local ok = pcall(writefile, settingsPath,
+        HttpService:JSONEncode({theme=themeName, language=lang, rememberMe=rememberMe}))
+    return ok
+end
+
+-- Warning: executor file APIs offer no secure keychain. This local JSON stores
+-- the real access key in plain text, strictly after an explicit user opt-in.
+-- Cached data is NEVER accepted as proof of access without HTTPS /v1/verify.
+local function saveSessionKey(key)
+    if not rememberMe or not supportsSessionFiles or type(key)~="string" then return false end
+    if #key < 4 or #key > 128 then return false end
+    ensureDataFolder()
+    local ok = pcall(writefile, sessionPath, HttpService:JSONEncode({version=1, key=key}))
+    return ok
+end
+local function readSessionKey()
+    if not rememberMe or not supportsSessionFiles then return nil end
+    local ok, body = pcall(readfile, sessionPath)
+    if not ok or type(body)~="string" then return nil end
+    local parsed, data = pcall(function() return HttpService:JSONDecode(body) end)
+    if not parsed or type(data)~="table" or data.version ~= 1 then return nil end
+    if type(data.key)~="string" or #data.key < 4 or #data.key > 128 then return nil end
+    return data.key
+end
+local function clearSessionKey()
+    -- delfile may not exist. Overwrite with an empty object as a fallback so
+    -- stale credentials cannot be read by this launcher even after logout.
+    if type(delfile)=="function" then
+        local ok = pcall(delfile, sessionPath)
+        if ok then return true end
+    end
+    if type(writefile)=="function" then
+        ensureDataFolder()
+        return pcall(writefile, sessionPath, HttpService:JSONEncode({version=1}))
+    end
+    return false
 end
 
 local uiConnections = {}
@@ -242,6 +305,7 @@ local sessionEpoch = 0
 local returnToAuthGate = nil
 local authStatusLabel, authSubmitButton, authInput
 local screen, root, content, statusLabel, titleLabel, footerLabel
+local switchKeyButton -- forward declaration for language changes in Settings
 
 local function connect(signal, cb)
     local c = signal:Connect(cb)
@@ -380,7 +444,7 @@ local function getDeviceHWID()
     return value -- Only sent to our own HTTPS API, never printed or stored locally.
 end
 
-local function verifyKey(key, onSuccess)
+local function verifyKey(key, onSuccess, onRejected)
     local auth = catalog.auth or {}
     local url = auth.verifyUrl
     if type(url) ~= "string" or not url:match("^https://") or not url:match("/v1/verify$") then
@@ -440,6 +504,15 @@ local function verifyKey(key, onSuccess)
             info(T("invalid"), true)
         else
             info(T("verifyFail"), true)
+        end
+        -- Network failures and rate limits are not proof that the key is invalid.
+        -- Clear Remember Me only when the VPS definitively rejects a credential.
+        if type(onRejected)=="function" and (
+            reason=="expired" or reason=="revoked" or reason=="invalid_key" or
+            reason=="hwid_mismatch" or reason=="hwid_required" or
+            (status == 403 and reason ~= "rate_limited")
+        ) then
+            onRejected(reason)
         end
         task.defer(function() if alive then render() end end)
     end)
@@ -775,14 +848,60 @@ local function renderSettings()
     local themeHint=txt(content,T("themeHint"),12,palette.muted,44)
     themeHint.Position=UDim2.fromOffset(0,235)
     themeHint.TextYAlignment=Enum.TextYAlignment.Top
-    local hint=txt(content,T("hide"),13,palette.muted,30)
-    hint.Position=UDim2.fromOffset(0,285)
-    local exit=button(content,T("exit"),260,42,function()
+    local rememberHeading=txt(content,T("rememberTitle"),16,palette.text,28)
+    rememberHeading.Font=Enum.Font.GothamBold
+    rememberHeading.Position=UDim2.fromOffset(0,279)
+    local rememberToggle=button(content,rememberMe and T("rememberOn") or T("rememberOff"),260,40,function()
+        if not supportsSessionFiles then
+            info(T("rememberUnavailable"),true)
+            return
+        end
+        if rememberMe then
+            -- Turn off local auto-login and erase stored access; NO server revoke.
+            rememberMe=false
+            local cleared=clearSessionKey()
+            local prefsSaved=savePreferences()
+            if cleared and prefsSaved then
+                info(T("rememberDisabled"))
+            else
+                info(T("rememberDeleteError"),true)
+            end
+        else
+            -- Settings is only available after successful VPS authentication.
+            if not authenticated or type(approvedKey)~="string" then return end
+            rememberMe=true
+            local stored=saveSessionKey(approvedKey)
+            local preferencesStored=stored and savePreferences()
+            if not stored or not preferencesStored then
+                rememberMe=false
+                clearSessionKey()
+                savePreferences()
+                info(T("rememberSaveError"),true)
+            else
+                info(T("rememberEnabled"))
+            end
+        end
+        if alive then render() end
+    end,rememberMe)
+    rememberToggle.Position=UDim2.fromOffset(0,313)
+    if not supportsSessionFiles then
+        rememberToggle.Active=false
+        rememberToggle.AutoButtonColor=false
+    end
+    local rememberDesc=txt(content,T("rememberHint"),12,palette.muted,28)
+    rememberDesc.Position=UDim2.fromOffset(278,318)
+    rememberDesc.Size=UDim2.fromOffset(630,28)
+    local rememberWarning=txt(content,T("rememberWarning"),11,palette.alert,38)
+    rememberWarning.Position=UDim2.fromOffset(0,363)
+    rememberWarning.Size=UDim2.new(1,-10,0,38)
+    local hint=txt(content,T("hide"),13,palette.muted,28)
+    hint.Position=UDim2.fromOffset(0,408)
+    local exit=button(content,T("exit"),260,40,function()
         if global.__PaporotnicLauncherStop then global.__PaporotnicLauncherStop() end
     end,false)
-    exit.Position=UDim2.fromOffset(0,327)
-    local note=txt(content,T("note"),13,palette.muted,60)
-    note.Position=UDim2.fromOffset(0,380)
+    exit.Position=UDim2.fromOffset(0,446)
+    local note=txt(content,T("note"),13,palette.muted,35)
+    note.Position=UDim2.fromOffset(0,496)
     note.TextYAlignment=Enum.TextYAlignment.Top
 end
 
@@ -813,7 +932,7 @@ titleLabel.Font=Enum.Font.GothamBold
 titleLabel.Position=UDim2.fromOffset(18,2)
 titleLabel.Size=UDim2.new(1,-260,0,56)
 -- Always visible after authorization: intended for testers AND regular users.
-local switchKeyButton=button(top,T("switchKey"),124,36,function()
+switchKeyButton=button(top,T("switchKey"),124,36,function()
     if type(returnToAuthGate)=="function" then returnToAuthGate() end
 end,false)
 switchKeyButton.Name="SwitchKeyButton"
@@ -1113,9 +1232,8 @@ local function playLaunchIntro()
         uiPhase="MAIN"
     end
 
-    -- Return to the ORIGINAL access gate without reloading remote code.
-    -- There is no local remember-me cache in this build: all new keys go
-    -- through the existing VPS verification endpoint, including HWID checks.
+    -- Return to the original gate. Switching keys is also a local logout:
+    -- drop the remembered credential, so developer tests can start clean.
     returnToAuthGate = function()
         if not alive or uiPhase~="MAIN" then return end
         if verifyingKey then
@@ -1123,6 +1241,9 @@ local function playLaunchIntro()
             return
         end
         sessionEpoch = sessionEpoch + 1
+        rememberMe=false
+        local cacheCleared=not supportsSessionFiles or clearSessionKey()
+        local preferenceCleared=not supportsSessionFiles or savePreferences()
         authenticated=false
         approvedKey=nil
         selectedTab="home"
@@ -1131,8 +1252,8 @@ local function playLaunchIntro()
         if authInput then authInput.Text="" end
         uiPhase="AUTH"
         if authStatusLabel then
-            authStatusLabel.Text=T("switchReady")
-            authStatusLabel.TextColor3=palette.muted
+            authStatusLabel.Text=(cacheCleared and preferenceCleared) and T("switchReady") or T("rememberDeleteError")
+            authStatusLabel.TextColor3=(cacheCleared and preferenceCleared) and palette.muted or palette.alert
         end
         if authSubmitButton then
             authSubmitButton.Text=T("enter")
@@ -1160,16 +1281,28 @@ local function playLaunchIntro()
         end
     end
 
+    local function finishActivation()
+        if not alive or uiPhase~="AUTH" or not authenticated then return end
+        -- Never store a key unless Remember Me was explicitly enabled in
+        -- Settings after an earlier successful sign-in.
+        if rememberMe and type(approvedKey)=="string" then
+            if not saveSessionKey(approvedKey) then
+                rememberMe=false
+                clearSessionKey()
+                savePreferences()
+                info(T("rememberSaveError"),true)
+            end
+        end
+        uiPhase="UNLOCKING"
+        authSubmitButton.Text=T("gateReady")
+        task.delay(0.42,function()
+            if alive then revealMain() end
+        end)
+    end
+
     local function submitKey()
         if not alive or uiPhase~="AUTH" or verifyingKey then return end
-        verifyKey(authInput.Text,function()
-            if not alive or uiPhase~="AUTH" then return end
-            uiPhase="UNLOCKING"
-            authSubmitButton.Text=T("gateReady")
-            task.delay(0.42,function()
-                if alive then revealMain() end
-            end)
-        end)
+        verifyKey(authInput.Text,finishActivation)
     end
     connect(authSubmitButton.MouseButton1Click,submitKey)
     connect(authInput.FocusLost,function(enterPressed)
@@ -1220,8 +1353,20 @@ local function playLaunchIntro()
         info(T("authNeedServer"),true)
     else
         authStatusLabel.Text=T("gateIdle")
+        -- One auto-login attempt per launch. Even a saved key MUST pass the
+        -- existing HTTPS verifier and HWID binding before revealing the hub.
+        local savedKey=readSessionKey()
+        if savedKey then
+            authStatusLabel.Text=T("rememberChecking")
+            verifyKey(savedKey,finishActivation,function()
+                -- Only a definite server rejection invalidates a cache.
+                rememberMe=false
+                clearSessionKey()
+                savePreferences()
+            end)
+        end
     end
 end
 
 task.spawn(playLaunchIntro)
-print("[Paporotnic Universal Launcher] v0.2.20 | PlaceId="..tostring(game.PlaceId))
+print("[Paporotnic Universal Launcher] v0.2.21 | PlaceId="..tostring(game.PlaceId))
