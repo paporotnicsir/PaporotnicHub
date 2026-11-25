@@ -1,4 +1,4 @@
--- PAPOROTNIC HUB | universal launcher v0.2.27
+-- PAPOROTNIC HUB | universal launcher v0.2.28
 -- 3-second loading gate, key-only entry, and quiet accent-glow interface.
 -- Based on the user's v0.2.14 launcher; auth API and game module flow preserved.
 
@@ -44,7 +44,7 @@ local function premiumImageId(value)
 end
 
 local FALLBACK = {
-    version = "0.2.26 (offline catalog)",
+    version = "0.2.28 (offline catalog)",
     latestVersion = "Paporotnic Hub Core v0.2.8",
     lifetimePrice = "$ ?? / TBA",
     announcement = "Welcome, LIL Paporotnics! The universal hub is online.",
@@ -59,6 +59,9 @@ local FALLBACK = {
             id = "release-020", version = "v0.2.0", name = "Launcher redesign",
             summary = "Larger interface, fern background and a dedicated Releases page.",
             updates = {
+                {version = "v0.2.28", title = "Theme Editor · custom accents",
+                  body = "Added editable accent colors with six presets, hex entry, a reset button and an optional foliage toggle. Preferences save locally when supported.",
+                  bodyRu = "Редактор цвета акцента: шесть готовых цветов, ввод HEX, сброс к стандартному и переключатель декоративной листвы. Настройки сохраняются локально при поддержке исполнителем."},
                 {version = "v0.2.27", title = "Layered Visual Fix",
                   body = "Manually separated fern artwork, exact user-provided Infinite Yield image, one real Game Library entry, and properly spaced script buttons. Added optional executor-side image loading.",
                   bodyRu = "Отдельные слои папоротника, точная картинка Infinite Yield от пользователя, одна настоящая игра в библиотеке и нормальные отступы между кнопками. Добавлена загрузка графики в поддерживаемых исполнителях."},
@@ -219,7 +222,7 @@ local strings = {
         releaseSub="Новости и изменения Paporotnic Hub", totalGames="Игр в каталоге", authState="Статус доступа",
         accessPublic="PUBLIC / TEST", accessGranted="Ключ активирован", accessNeed="Ожидает ключ",
         patches="ПОДОБНОВЛЕНИЙ", expandedHint="Нажми на релиз, чтобы увидеть изменения",
-        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.27",
+        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.28",
         themeHeading="ТЕМА ОФОРМЛЕНИЯ", themeHint="Изменения применяются сразу. Сохранение работает, если исполнитель поддерживает запись файлов.",
         themeForest="ЛЕСНАЯ", themeOcean="НОЧНОЙ ОКЕАН", themeEmber="ЗАКАТ", themeViolet="ФИОЛЕТОВАЯ", themeActive="ВЫБРАНО",
          gateSubtitle="Для доступа к хабу требуется ключ", gateIdle="Введите ключ для продолжения.",
@@ -286,7 +289,7 @@ local strings = {
         releaseSub="News and changes for Paporotnic Hub", totalGames="Games in catalog", authState="Access status",
         accessPublic="PUBLIC / TEST", accessGranted="Key activated", accessNeed="Awaiting key",
         patches="PATCHES", expandedHint="Click a release to view its updates",
-        releaseBuild="LAUNCHER BUILD: v0.2.27",
+        releaseBuild="LAUNCHER BUILD: v0.2.28",
         themeHeading="COLOR THEME", themeHint="Themes apply instantly. Saving needs executor file access.",
         themeForest="FOREST", themeOcean="NIGHT OCEAN", themeEmber="SUNSET", themeViolet="VIOLET", themeActive="ACTIVE",
          gateSubtitle="An access key is required to continue", gateIdle="Enter your key to continue.",
@@ -332,12 +335,28 @@ local themes = {
     }
 }
 local themeOrder = {"forest", "ocean", "ember", "violet"}
+local accentSwatches = {
+    {"#65F42B", "FERN"}, {"#76E8BB", "MINT"}, {"#58C7FF", "CYAN"},
+    {"#C59EFF", "VIOLET"}, {"#FFB36A", "PEACH"}, {"#FF83C1", "ROSE"},
+}
+-- Require a bright, legible accent: the launcher draws dark text on accent buttons.
+local function parseAccentHex(input)
+    if type(input) ~= "string" then return nil end
+    local hex=input:gsub("%s+", ""):upper()
+    local r,g,b=hex:match("^#?(%x%x)(%x%x)(%x%x)$")
+    if not r then return nil end
+    r,g,b=tonumber(r,16),tonumber(g,16),tonumber(b,16)
+    if 0.299*r + 0.587*g + 0.114*b < 140 then return nil end
+    return string.format("#%02X%02X%02X",r,g,b), Color3.fromRGB(r,g,b)
+end
 local settingsPath = "PaporotnicHub/preferences.json"
 local sessionPath = "PaporotnicHub/session.json"
 local recentTemporaryPath = "PaporotnicHub/recent-temporary.json"
 local supportsSessionFiles = type(readfile)=="function" and type(writefile)=="function"
 local rememberMe = false -- OFF by default; never save a key before explicit opt-in.
 local themeName = "forest"
+local customAccentHex = nil
+local showFoliage = true
 local lastLaunchedGameId = nil
 do
     if type(readfile)=="function" then
@@ -346,6 +365,9 @@ do
             local parsed, saved = pcall(function() return HttpService:JSONDecode(body) end)
             if parsed and type(saved)=="table" then
                 if type(saved.theme)=="string" and themes[saved.theme] then themeName=saved.theme end
+                local normalizedAccent = parseAccentHex(saved.accentHex)
+                if normalizedAccent then customAccentHex=normalizedAccent end
+                if saved.showFoliage == false then showFoliage=false end
                 if saved.language=="ru" or saved.language=="en" then lang=saved.language end
                 if saved.rememberMe == true and supportsSessionFiles then rememberMe=true end
                 if type(saved.recentGameId)=="string" and #saved.recentGameId<100 then
@@ -357,6 +379,10 @@ do
 end
 local palette = {}
 for key,color in pairs(themes[themeName]) do palette[key]=color end
+if customAccentHex then
+    local _,accentColor=parseAccentHex(customAccentHex)
+    if accentColor then palette.highlight=accentColor end
+end
 local themeBindings = setmetatable({}, {__mode="k"})
 local function ensureDataFolder()
     if type(makefolder)=="function" then pcall(makefolder,"PaporotnicHub") end
@@ -365,7 +391,9 @@ local function savePreferences()
     if type(writefile)~="function" then return false end
     ensureDataFolder()
     local ok = pcall(writefile, settingsPath,
-        HttpService:JSONEncode({theme=themeName, language=lang, rememberMe=rememberMe, recentGameId=lastLaunchedGameId}))
+        HttpService:JSONEncode({theme=themeName, accentHex=customAccentHex,
+            showFoliage=showFoliage, language=lang, rememberMe=rememberMe,
+            recentGameId=lastLaunchedGameId}))
     return ok
 end
 
@@ -454,6 +482,7 @@ local switchKeyButton -- forward declaration for language changes in Settings
 local sidebarButtons = {}
 local sidebarAccessText, topVerifyText
 local rightRail, premiumHeaderType, premiumHeaderName, premiumScale
+local dashboardWallpaper, cornerFerns -- actual graphics are created later, after Settings
 local renderRightRail = function() end
 local approvedSecondsLeft = nil
 
@@ -548,10 +577,7 @@ local function attachLayer(image,key)
     end)
 end
 
-local function setTheme(name)
-    if not themes[name] or name==themeName then return end
-    themeName=name
-    for key,color in pairs(themes[name]) do palette[key]=color end
+local function repaintPalette()
     for object, properties in pairs(themeBindings) do
         if object.Parent then
             for property, paletteKey in pairs(properties) do
@@ -559,10 +585,40 @@ local function setTheme(name)
             end
         end
     end
+    task.defer(function() if alive and type(render)=="function" then render() end end)
+end
+local function setTheme(name)
+    if not themes[name] or name==themeName then return end
+    themeName=name
+    for key,color in pairs(themes[name]) do palette[key]=color end
+    -- A user's explicit custom accent takes priority over a theme's default.
+    if customAccentHex then
+        local _,color=parseAccentHex(customAccentHex)
+        if color then palette.highlight=color end
+    end
+    repaintPalette()
     savePreferences()
-    task.defer(function()
-        if type(render)=="function" then render() end
-    end)
+end
+local function setCustomAccent(input)
+    local normalized,color=parseAccentHex(input)
+    if not normalized then return false end
+    customAccentHex=normalized
+    palette.highlight=color
+    repaintPalette()
+    savePreferences()
+    return true
+end
+local function resetCustomAccent()
+    customAccentHex=nil
+    palette.highlight=themes[themeName].highlight
+    repaintPalette()
+    savePreferences()
+end
+local function setFoliageVisible(enabled)
+    showFoliage=(enabled==true)
+    if dashboardWallpaper and dashboardWallpaper.Parent then dashboardWallpaper.Visible=showFoliage end
+    if cornerFerns and cornerFerns.Parent then cornerFerns.Visible=showFoliage end
+    savePreferences()
 end
 local function corner(target, radius)
     return create("UICorner", {CornerRadius=UDim.new(0,radius or 10)}, target)
@@ -1346,9 +1402,19 @@ end
 
 local function renderSettings()
     clearPage()
-    local heading=txt(content,T("settings"),22,palette.text,38)
+    local L=function(ru,en) return lang=="ru" and ru or en end
+    local scroll=create("ScrollingFrame",{
+        Name="ThemeEditorScroll",Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
+        BorderSizePixel=0,ScrollBarThickness=4,ScrollBarImageColor3=palette.highlight,
+        ScrollingDirection=Enum.ScrollingDirection.Y,
+        CanvasSize=UDim2.fromOffset(0,760)
+    },content)
+    local page=create("Frame",{
+        Size=UDim2.new(1,-14,0,750),BackgroundTransparency=1,BorderSizePixel=0
+    },scroll)
+    local heading=txt(page,T("settings"),22,palette.text,38)
     heading.Font=Enum.Font.GothamBold
-    local b=button(content,T("lang"),260,42,function()
+    local languageButton=button(page,T("lang"),240,39,function()
         lang=lang=="ru" and "en" or "ru"
         savePreferences()
         if titleLabel then titleLabel.Text=T("title") end
@@ -1356,116 +1422,153 @@ local function renderSettings()
         if switchKeyButton then switchKeyButton.Text=T("switchKey") end
         task.defer(function() if alive then render() end end)
     end,false)
-    b.Position=UDim2.fromOffset(0,53)
+    languageButton.Position=UDim2.fromOffset(0,48)
 
-    local themeHeading=txt(content,T("themeHeading"),16,palette.text,27)
+    local themeHeading=txt(page,T("themeHeading"),16,palette.text,27)
     themeHeading.Font=Enum.Font.GothamBold
-    themeHeading.Position=UDim2.fromOffset(0,118)
+    themeHeading.Position=UDim2.fromOffset(0,107)
     for index,name in ipairs(themeOrder) do
-        local theme = themes[name]
-        local isSelected = (name==themeName)
-        local label = T("theme"..name:sub(1,1):upper()..name:sub(2))
+        local theme=themes[name]
+        local selected=(name==themeName)
+        local label=T("theme"..name:sub(1,1):upper()..name:sub(2))
         local tile=create("TextButton",{
-            Position=UDim2.fromOffset((index-1)*204,153), Size=UDim2.fromOffset(190,74),
-            Text="",BorderSizePixel=0,AutoButtonColor=true,
-            BackgroundColor3=palette.panel
-        },content)
+            Position=UDim2.fromOffset((index-1)*204,141),Size=UDim2.fromOffset(190,74),
+            BackgroundColor3=palette.panel,BorderSizePixel=0,Text="",AutoButtonColor=true
+        },page)
         corner(tile,11)
-        create("UIStroke",{
-            Thickness=isSelected and 2 or 1,
-            Color=isSelected and palette.highlight or palette.border,
-            Transparency=isSelected and 0 or 0.35
-        },tile)
+        create("UIStroke",{Thickness=selected and 2 or 1,
+            Color=selected and palette.highlight or palette.border,
+            Transparency=selected and 0 or .35},tile)
         local swatch=create("Frame",{
             Position=UDim2.fromOffset(13,14),Size=UDim2.fromOffset(18,18),
             BackgroundColor3=theme.highlight,BorderSizePixel=0
         },tile)
         corner(swatch,5)
-        local nameLabel=txt(tile,label,13,palette.text,24)
-        nameLabel.Font=Enum.Font.GothamBold
-        nameLabel.Position=UDim2.fromOffset(40,11)
-        nameLabel.Size=UDim2.new(1,-49,0,26)
-        local selection=txt(tile,isSelected and T("themeActive") or "",11,palette.highlight,20)
+        local labelText=txt(tile,label,13,palette.text,24)
+        labelText.Font=Enum.Font.GothamBold
+        labelText.Position=UDim2.fromOffset(40,11)
+        labelText.Size=UDim2.new(1,-49,0,26)
+        local selection=txt(tile,selected and T("themeActive") or "",11,palette.highlight,20)
         selection.Position=UDim2.fromOffset(13,44)
         selection.Size=UDim2.new(1,-25,0,20)
-        connect(tile.MouseButton1Click,function()
-            setTheme(name)
-            if alive then render() end
-        end)
+        connect(tile.MouseButton1Click,function() setTheme(name) end)
     end
-    local themeHint=txt(content,T("themeHint"),12,palette.muted,44)
-    themeHint.Position=UDim2.fromOffset(0,235)
-    themeHint.TextYAlignment=Enum.TextYAlignment.Top
-    local rememberHeading=txt(content,T("rememberTitle"),16,palette.text,28)
-    rememberHeading.Font=Enum.Font.GothamBold
-    rememberHeading.Position=UDim2.fromOffset(0,279)
-    local rememberToggle=button(content,rememberMe and T("rememberOn") or T("rememberOff"),260,40,function()
-        if not supportsSessionFiles then
-            info(T("rememberUnavailable"),true)
-            return
+    local hint=txt(page,T("themeHint"),12,palette.muted,26)
+    hint.Position=UDim2.fromOffset(0,219)
+    hint.TextYAlignment=Enum.TextYAlignment.Center
+
+    local accentTitle=txt(page,L("ЦВЕТ АКЦЕНТА", "ACCENT COLOR"),16,palette.text,26)
+    accentTitle.Font=Enum.Font.GothamBold
+    accentTitle.Position=UDim2.fromOffset(0,257)
+    local accentInfo=txt(page,L("Выбери цвет или введи HEX; фон и акцент настраиваются отдельно.",
+        "Pick a swatch or enter HEX; the theme and accent are independent."),12,palette.muted,22)
+    accentInfo.Position=UDim2.fromOffset(0,281)
+    for i,swatch in ipairs(accentSwatches) do
+        local hex,name=swatch[1],swatch[2]
+        local _,color=parseAccentHex(hex)
+        local selected=customAccentHex==hex
+        local b=create("TextButton",{
+            Position=UDim2.fromOffset((i-1)*57,310),Size=UDim2.fromOffset(47,38),
+            BackgroundColor3=color,Text="",BorderSizePixel=0,AutoButtonColor=true
+        },page)
+        corner(b,9)
+        create("UIStroke",{Thickness=selected and 2.5 or 1,
+            Color=selected and palette.text or palette.border,
+            Transparency=selected and 0 or .3},b)
+        connect(b.MouseButton1Click,function() setCustomAccent(hex) end)
+    end
+    local accentLabel=txt(page,L("Свой цвет", "Custom HEX"),12,palette.muted,24)
+    accentLabel.Position=UDim2.fromOffset(0,364)
+    local hexBox=create("TextBox",{
+        Position=UDim2.fromOffset(112,363),Size=UDim2.fromOffset(160,32),
+        BackgroundColor3=palette.card,TextColor3=palette.text,
+        PlaceholderText="#65F42B",PlaceholderColor3=palette.muted,
+        Text=customAccentHex or "",BorderSizePixel=0,
+        Font=Enum.Font.Code,TextSize=14,ClearTextOnFocus=false
+    },page)
+    corner(hexBox,7)
+    local applyButton=button(page,L("ПРИМЕНИТЬ", "APPLY"),113,32,function()
+        local ok=setCustomAccent(hexBox.Text)
+        if not ok then
+            info(L("Введите яркий HEX-цвет: #RRGGBB.", "Enter a bright HEX color: #RRGGBB."),true)
+        else
+            info(L("Цвет акцента изменён.", "Accent color updated."))
         end
+    end,true)
+    applyButton.Position=UDim2.fromOffset(283,363)
+    local resetButton=button(page,L("СБРОСИТЬ ЦВЕТ", "RESET ACCENT"),162,32,function()
+        resetCustomAccent()
+        info(L("Вернули стандартный цвет выбранной темы.", "Restored this theme's default accent."))
+    end,false)
+    resetButton.Position=UDim2.fromOffset(408,363)
+    local fileWarning=txt(page,L("Настройки сохраняются между запусками, если исполнитель поддерживает запись файлов.",
+        "Preferences persist when the executor supports file access."),11,palette.muted,25)
+    fileWarning.Position=UDim2.fromOffset(0,402)
+
+    local foliageToggle=button(page,showFoliage and L("ЛИСТВА: ВКЛ", "FOLIAGE: ON")
+        or L("ЛИСТВА: ВЫКЛ", "FOLIAGE: OFF"),206,34,function()
+        setFoliageVisible(not showFoliage)
+        if alive then render() end
+    end,showFoliage)
+    foliageToggle.Position=UDim2.fromOffset(0,438)
+    local foliageInfo=txt(page,L("Декоративные папоротники по краям. Логотип останется.",
+        "Decorative corner ferns; the logo stays visible."),12,palette.muted,32)
+    foliageInfo.Position=UDim2.fromOffset(222,438)
+    foliageInfo.Size=UDim2.new(1,-230,0,32)
+
+    local rememberHeading=txt(page,T("rememberTitle"),16,palette.text,28)
+    rememberHeading.Font=Enum.Font.GothamBold
+    rememberHeading.Position=UDim2.fromOffset(0,496)
+    local rememberToggle=button(page,rememberMe and T("rememberOn") or T("rememberOff"),246,38,function()
+        if not supportsSessionFiles then info(T("rememberUnavailable"),true);return end
         if rememberMe then
-            -- Turn off local auto-login and erase stored access; NO server revoke.
             rememberMe=false
             local cleared=clearSessionKey()
             local prefsSaved=savePreferences()
-            -- After disabling auto-login, a temporary key may still be
-            -- prefilled next time. Lifetime remains deliberately unsaved.
             if approvedKeyKind=="temporary" and type(approvedKey)=="string" then
                 saveRecentTemporaryKey(approvedKey)
-            else
-                clearRecentTemporaryKey()
-            end
-            if cleared and prefsSaved then
-                info(T("rememberDisabled"))
-            else
-                info(T("rememberDeleteError"),true)
-            end
+            else clearRecentTemporaryKey() end
+            info(cleared and prefsSaved and T("rememberDisabled") or T("rememberDeleteError"),
+                not (cleared and prefsSaved))
         else
-            -- Settings is only available after successful VPS authentication.
             if not authenticated or type(approvedKey)~="string" then return end
             rememberMe=true
             local stored=saveSessionKey(approvedKey)
-            local preferencesStored=stored and savePreferences()
-            if not stored or not preferencesStored then
-                rememberMe=false
-                clearSessionKey()
-                savePreferences()
+            local prefsSaved=stored and savePreferences()
+            if not stored or not prefsSaved then
+                rememberMe=false;clearSessionKey();savePreferences()
                 info(T("rememberSaveError"),true)
             else
-                -- Auto-login uses session.json, so no second plaintext cache
-                -- of the key is needed in recent-temporary.json.
                 clearRecentTemporaryKey()
                 info(T("rememberEnabled"))
             end
         end
         if alive then render() end
     end,rememberMe)
-    rememberToggle.Position=UDim2.fromOffset(0,313)
+    rememberToggle.Position=UDim2.fromOffset(0,531)
     if not supportsSessionFiles then
         rememberToggle.Active=false
         rememberToggle.AutoButtonColor=false
     end
-    local rememberDesc=txt(content,T("rememberHint"),12,palette.muted,28)
-    rememberDesc.Position=UDim2.fromOffset(278,318)
-    rememberDesc.Size=UDim2.new(1,-280,0,28)
-    local rememberWarning=txt(content,T("rememberWarning"),11,palette.alert,38)
-    rememberWarning.Position=UDim2.fromOffset(0,363)
-    rememberWarning.Size=UDim2.new(1,-10,0,38)
-    local recentHint=txt(content,T("recentWarning"),11,palette.alert,36)
-    recentHint.Position=UDim2.fromOffset(0,395)
-    recentHint.Size=UDim2.new(1,-10,0,30)
+    local rememberDesc=txt(page,T("rememberHint"),12,palette.muted,34)
+    rememberDesc.Position=UDim2.fromOffset(261,533)
+    rememberDesc.Size=UDim2.new(1,-270,0,34)
+    local rememberWarning=txt(page,T("rememberWarning"),11,palette.alert,32)
+    rememberWarning.Position=UDim2.fromOffset(0,575)
+    rememberWarning.Size=UDim2.new(1,-15,0,32)
+    local recentHint=txt(page,T("recentWarning"),11,palette.alert,34)
+    recentHint.Position=UDim2.fromOffset(0,604)
+    recentHint.Size=UDim2.new(1,-15,0,34)
     recentHint.TextWrapped=true
-    local hint=txt(content,T("hide"),13,palette.muted,28)
-    hint.Position=UDim2.fromOffset(0,428)
-    local exit=button(content,T("exit"),260,40,function()
+    local hideHint=txt(page,T("hide"),13,palette.muted,28)
+    hideHint.Position=UDim2.fromOffset(0,650)
+    local exit=button(page,T("exit"),260,39,function()
         if global.__PaporotnicLauncherStop then global.__PaporotnicLauncherStop() end
     end,false)
-    exit.Position=UDim2.fromOffset(0,459)
-    local note=txt(content,T("note"),13,palette.muted,35)
-    note.Position=UDim2.fromOffset(0,502)
-    note.Size=UDim2.new(1,-10,0,32)
-    note.TextYAlignment=Enum.TextYAlignment.Top
+    exit.Position=UDim2.fromOffset(0,681)
+    local note=txt(page,T("note"),12,palette.muted,36)
+    note.Position=UDim2.fromOffset(0,723)
+    note.Size=UDim2.new(1,-15,0,32)
 end
 
 function render()
@@ -1526,9 +1629,9 @@ if workspace.CurrentCamera then
 end
 
 -- First visual layer: true graphic wallpaper. All controls are separate GUI elements.
-local dashboardWallpaper=create("ImageLabel",{
+dashboardWallpaper=create("ImageLabel",{
     Name="LayeredForestBackground",Position=UDim2.fromScale(0,0),Size=UDim2.fromScale(1,1),
-    BackgroundTransparency=1,BorderSizePixel=0,Image="",ImageTransparency=.69,
+    Visible=showFoliage,BackgroundTransparency=1,BorderSizePixel=0,Image="",ImageTransparency=.69,
     ScaleType=Enum.ScaleType.Crop
 },root)
 attachLayer(dashboardWallpaper,"wallpaper")
@@ -1575,7 +1678,7 @@ local function headerChip(textValue,x,w)
 end
 local stateChip,stateText=headerChip("●  ACCESS VERIFIED",326,170)
 local apiChip,apiText=headerChip("KEY SYSTEM",510,139)
-local buildChip,buildText=headerChip("HUB  v0.2.27",663,150)
+local buildChip,buildText=headerChip("HUB  v0.2.28",663,150)
 
 local profile=create("Frame",{Position=UDim2.new(1,-333,0,9),Size=UDim2.fromOffset(189,58),
     BackgroundColor3=palette.panel,BorderSizePixel=0},top)
@@ -1611,9 +1714,9 @@ local sidebar=create("Frame",{
 create("Frame",{Position=UDim2.new(1,-1,0,0),Size=UDim2.new(0,1,1,0),
     BackgroundColor3=palette.border,BorderSizePixel=0},sidebar)
 sidebar.ClipsDescendants=true
-local cornerFerns=create("ImageLabel",{
+cornerFerns=create("ImageLabel",{
     Name="LayeredFernCornerDecor",Position=UDim2.fromOffset(0,-77),
-    Size=UDim2.fromOffset(1332,750),BackgroundTransparency=1,
+    Size=UDim2.fromOffset(1332,750),Visible=showFoliage,BackgroundTransparency=1,
     BorderSizePixel=0,Image="",ImageTransparency=.06,
     ScaleType=Enum.ScaleType.Stretch
 },sidebar)
@@ -1767,11 +1870,11 @@ renderRightRail=function()
     local updates=rrPanel(485,150)
     rrLabel(updates,"↻  "..L("Обновления","Latest Updates"),15,palette.text,13,8,250,28,true)
     local recent={
+        {"v0.2.28",L("Редактор оформления","Theme Editor")},
+        {"v0.2.27",L("Слои и графика","Layered Visual Fix")},
         {"v0.2.26",L("Чистый интерфейс","Clean Rework")},
-        {"v0.2.27",L("Layered Visual Fix","Layered Visual Fix")},
         {"v0.2.25",L("Premium Dashboard","Premium Dashboard")},
         {"v0.2.24",L("Главная страница","Home Foundation")},
-        {"v0.2.23",L("Universal Scripts","Universal Scripts")},
     }
     for i,r in ipairs(recent) do
         local y=40+(i-1)*26
@@ -2258,4 +2361,4 @@ local function playLaunchIntro()
 end
 
 task.spawn(playLaunchIntro)
-print("[Paporotnic Universal Launcher] v0.2.26 | PlaceId="..tostring(game.PlaceId))
+print("[Paporotnic Universal Launcher] v0.2.28 | PlaceId="..tostring(game.PlaceId))
