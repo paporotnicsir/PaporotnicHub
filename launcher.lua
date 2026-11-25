@@ -1,4 +1,4 @@
--- PAPOROTNIC HUB | universal launcher v0.2.30
+-- PAPOROTNIC HUB | universal launcher v0.2.31
 -- 3-second loading gate, key-only entry, and quiet accent-glow interface.
 -- Based on the user's v0.2.14 launcher; auth API and game module flow preserved.
 
@@ -60,7 +60,7 @@ local function gameIconContent(item)
 end
 
 local FALLBACK = {
-    version = "0.2.30 (offline catalog)",
+    version = "0.2.31 (offline catalog)",
     latestVersion = "Paporotnic Hub Core v0.2.8",
     lifetimePrice = "$ ?? / TBA",
     announcement = "Welcome, LIL Paporotnics! The universal hub is online.",
@@ -75,6 +75,9 @@ local FALLBACK = {
             id = "release-020", version = "v0.2.0", name = "Launcher redesign",
             summary = "Larger interface, fern background and a dedicated Releases page.",
             updates = {
+                {version = "v0.2.31", title = "Panel colors · navigation cleanup",
+                  body = "Independent top-bar/sidebar colors, streamlined Games navigation and clearer Temporary status; no changes to license checks.",
+                  bodyRu = "Отдельная окраска верхней и боковой панелей, упрощённые кнопки Games/Universal Scripts и более заметный Temporary."},
                 {version = "v0.2.30", title = "UI Polish · clipping and license styling",
                   body = "No green transition flash, rounded game and IY artwork, compact sidebar controls, corrected game thumbnails and license typography.",
                   bodyRu = "Убрана зелёная рамка при входе, исправлены скругления картинок игр и IY, упрощены кнопки слева, возвращены обложки и оформлены статусы лицензий."},
@@ -244,7 +247,7 @@ local strings = {
         releaseSub="Новости и изменения Paporotnic Hub", totalGames="Игр в каталоге", authState="Статус доступа",
         accessPublic="PUBLIC / TEST", accessGranted="Ключ активирован", accessNeed="Ожидает ключ",
         patches="ПОДОБНОВЛЕНИЙ", expandedHint="Нажми на релиз, чтобы увидеть изменения",
-        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.30",
+        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.31",
         themeHeading="ТЕМА ОФОРМЛЕНИЯ", themeHint="Изменения применяются сразу. Сохранение работает, если исполнитель поддерживает запись файлов.",
         themeForest="ЛЕСНАЯ", themeOcean="НОЧНОЙ ОКЕАН", themeEmber="ЗАКАТ", themeViolet="ФИОЛЕТОВАЯ", themeActive="ВЫБРАНО",
          gateSubtitle="Для доступа к хабу требуется ключ", gateIdle="Введите ключ для продолжения.",
@@ -311,7 +314,7 @@ local strings = {
         releaseSub="News and changes for Paporotnic Hub", totalGames="Games in catalog", authState="Access status",
         accessPublic="PUBLIC / TEST", accessGranted="Key activated", accessNeed="Awaiting key",
         patches="PATCHES", expandedHint="Click a release to view its updates",
-        releaseBuild="LAUNCHER BUILD: v0.2.30",
+        releaseBuild="LAUNCHER BUILD: v0.2.31",
         themeHeading="COLOR THEME", themeHint="Themes apply instantly. Saving needs executor file access.",
         themeForest="FOREST", themeOcean="NIGHT OCEAN", themeEmber="SUNSET", themeViolet="VIOLET", themeActive="ACTIVE",
          gateSubtitle="An access key is required to continue", gateIdle="Enter your key to continue.",
@@ -371,6 +374,24 @@ local function parseAccentHex(input)
     if 0.299*r + 0.587*g + 0.114*b < 140 then return nil end
     return string.format("#%02X%02X%02X",r,g,b), Color3.fromRGB(r,g,b)
 end
+-- Header and sidebar have their own surface palettes; this is deliberately
+-- independent of the global theme/accent. Keep surface colors dark so the
+-- existing light labels/icons remain readable in every theme.
+local surfaceSwatches = {
+    {"#071311", "FOREST"}, {"#102333", "OCEAN"}, {"#22192F", "VIOLET"},
+    {"#261B1B", "EMBER"}, {"#181C20", "SLATE"}, {"#10292A", "TEAL"},
+}
+local function parseSurfaceHex(input)
+    if type(input)~="string" then return nil end
+    local hex=input:gsub("%s+", ""):upper()
+    local r,g,b=hex:match("^#?(%x%x)(%x%x)(%x%x)$")
+    if not r then return nil end
+    r,g,b=tonumber(r,16),tonumber(g,16),tonumber(b,16)
+    -- White labels need dark surfaces. Limit luminance rather than requiring
+    -- vibrant colors: the ordinary accent parser does the opposite.
+    if 0.299*r+0.587*g+0.114*b > 110 then return nil end
+    return string.format("#%02X%02X%02X",r,g,b),Color3.fromRGB(r,g,b)
+end
 local settingsPath = "PaporotnicHub/preferences.json"
 local sessionPath = "PaporotnicHub/session.json"
 local recentTemporaryPath = "PaporotnicHub/recent-temporary.json"
@@ -378,6 +399,8 @@ local supportsSessionFiles = type(readfile)=="function" and type(writefile)=="fu
 local rememberMe = false -- OFF by default; never save a key before explicit opt-in.
 local themeName = "forest"
 local customAccentHex = nil
+local headerSurfaceHex = nil
+local sidebarSurfaceHex = nil
 local showFoliage = true
 local lastLaunchedGameId = nil
 do
@@ -389,6 +412,10 @@ do
                 if type(saved.theme)=="string" and themes[saved.theme] then themeName=saved.theme end
                 local normalizedAccent = parseAccentHex(saved.accentHex)
                 if normalizedAccent then customAccentHex=normalizedAccent end
+                local topHex=parseSurfaceHex(saved.headerSurfaceHex)
+                local sideHex=parseSurfaceHex(saved.sidebarSurfaceHex)
+                if topHex then headerSurfaceHex=topHex end
+                if sideHex then sidebarSurfaceHex=sideHex end
                 if saved.showFoliage == false then showFoliage=false end
                 if saved.language=="ru" or saved.language=="en" then lang=saved.language end
                 if saved.rememberMe == true and supportsSessionFiles then rememberMe=true end
@@ -405,6 +432,13 @@ if customAccentHex then
     local _,accentColor=parseAccentHex(customAccentHex)
     if accentColor then palette.highlight=accentColor end
 end
+local function syncSurfacePalette()
+    local _,topColor=parseSurfaceHex(headerSurfaceHex)
+    local _,sideColor=parseSurfaceHex(sidebarSurfaceHex)
+    palette.headerSurface=topColor or palette.background
+    palette.sidebarSurface=sideColor or palette.background
+end
+syncSurfacePalette()
 local themeBindings = setmetatable({}, {__mode="k"})
 local function ensureDataFolder()
     if type(makefolder)=="function" then pcall(makefolder,"PaporotnicHub") end
@@ -414,6 +448,7 @@ local function savePreferences()
     ensureDataFolder()
     local ok = pcall(writefile, settingsPath,
         HttpService:JSONEncode({theme=themeName, accentHex=customAccentHex,
+            headerSurfaceHex=headerSurfaceHex, sidebarSurfaceHex=sidebarSurfaceHex,
             showFoliage=showFoliage, language=lang, rememberMe=rememberMe,
             recentGameId=lastLaunchedGameId}))
     return ok
@@ -619,6 +654,7 @@ local function setTheme(name)
         local _,color=parseAccentHex(customAccentHex)
         if color then palette.highlight=color end
     end
+    syncSurfacePalette() -- overrides persist across whole-theme changes
     repaintPalette()
     savePreferences()
 end
@@ -634,6 +670,23 @@ end
 local function resetCustomAccent()
     customAccentHex=nil
     palette.highlight=themes[themeName].highlight
+    repaintPalette()
+    savePreferences()
+end
+local function setSurfaceColor(section,input)
+    local normalized,color=parseSurfaceHex(input)
+    if not normalized or (section~="header" and section~="sidebar") then return false end
+    if section=="header" then headerSurfaceHex=normalized else sidebarSurfaceHex=normalized end
+    syncSurfacePalette()
+    repaintPalette()
+    savePreferences()
+    return true
+end
+local function resetSurfaceColor(section)
+    if section=="header" then headerSurfaceHex=nil
+    elseif section=="sidebar" then sidebarSurfaceHex=nil
+    else return end
+    syncSurfacePalette()
     repaintPalette()
     savePreferences()
 end
@@ -1513,24 +1566,11 @@ end
 
 local function renderGames()
     clearPage()
-    local categoryBar=create("Frame",{
-        Size=UDim2.new(1,0,0,44), BackgroundTransparency=1,
-    },content)
-    local gameTab=button(categoryBar,T("scriptsGame"),220,40,function()
-        scriptCategory="games"
-        renderGames()
-    end,scriptCategory=="games")
-    gameTab.Name="GameScriptsTab"
-    gameTab.Position=UDim2.fromOffset(0,0)
-    local universalTab=button(categoryBar,T("scriptsUniversal"),220,40,function()
-        scriptCategory="universal"
-        renderGames()
-    end,scriptCategory=="universal")
-    universalTab.Name="UniversalScriptsTab"
-    universalTab.Position=UDim2.fromOffset(246,0)
+    -- Navigation is owned by the left sidebar: Games and Universal Scripts.
+    -- No second Game Scripts/Universal Scripts switcher above the library.
     local panel=create("Frame",{
-        Position=UDim2.fromOffset(0,58),
-        Size=UDim2.new(1,0,1,-58), BackgroundTransparency=1
+        Name="SelectedGamesContent",Position=UDim2.fromOffset(0,0),
+        Size=UDim2.fromScale(1,1),BackgroundTransparency=1
     },content)
     if scriptCategory=="universal" then
         renderUniversalScripts(panel)
@@ -1641,10 +1681,10 @@ local function renderSettings()
         Name="ThemeEditorScroll",Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
         BorderSizePixel=0,ScrollBarThickness=4,ScrollBarImageColor3=palette.highlight,
         ScrollingDirection=Enum.ScrollingDirection.Y,
-        CanvasSize=UDim2.fromOffset(0,760)
+        CanvasSize=UDim2.fromOffset(0,1150)
     },content)
     local page=create("Frame",{
-        Size=UDim2.new(1,-14,0,750),BackgroundTransparency=1,BorderSizePixel=0
+        Size=UDim2.new(1,-14,0,1140),BackgroundTransparency=1,BorderSizePixel=0
     },scroll)
     local heading=txt(page,T("settings"),22,palette.text,38)
     heading.Font=Enum.Font.GothamBold
@@ -1739,20 +1779,79 @@ local function renderSettings()
         "Preferences persist when the executor supports file access."),11,palette.muted,25)
     fileWarning.Position=UDim2.fromOffset(0,402)
 
+    -- Independent color controls for two structural UI regions. These are
+    -- surfaces, not accents: swatches and HEX are deliberately dark.
+    local sectionTitle=txt(page,L("ЦВЕТ ПАНЕЛЕЙ", "PANEL COLORS"),16,palette.text,27)
+    sectionTitle.Font=Enum.Font.GothamBold
+    sectionTitle.Position=UDim2.fromOffset(0,436)
+    local sectionHint=txt(page,L("Верхняя панель и боковина настраиваются отдельно от темы и акцента.",
+        "Top bar and sidebar colors are independent of theme and accent."),12,palette.muted,25)
+    sectionHint.Position=UDim2.fromOffset(0,462)
+    local function drawPanelControl(section,y,ru,en)
+        local activeHex=section=="header" and headerSurfaceHex or sidebarSurfaceHex
+        local heading=txt(page,L(ru,en),13,palette.text,25)
+        heading.Font=Enum.Font.GothamBold
+        heading.Position=UDim2.fromOffset(0,y)
+        for i,swatch in ipairs(surfaceSwatches) do
+            local hex,name=swatch[1],swatch[2]
+            local _,swatchColor=parseSurfaceHex(hex)
+            local choice=create("TextButton",{
+                Name="PanelColor_"..section.."_"..name,
+                Position=UDim2.fromOffset((i-1)*57,y+30),Size=UDim2.fromOffset(46,34),
+                BackgroundColor3=swatchColor,BorderSizePixel=0,Text="",AutoButtonColor=true
+            },page)
+            corner(choice,8)
+            create("UIStroke",{Thickness=hex==activeHex and 2.5 or 1,
+                Color=hex==activeHex and palette.highlight or palette.border,
+                Transparency=hex==activeHex and 0 or .25},choice)
+            connect(choice.MouseButton1Click,function() setSurfaceColor(section,hex) end)
+        end
+        local customLabel=txt(page,"HEX",12,palette.muted,25)
+        customLabel.Position=UDim2.fromOffset(0,y+76)
+        local box=create("TextBox",{
+            Name="PanelHex_"..section,
+            Position=UDim2.fromOffset(46,y+76),Size=UDim2.fromOffset(158,32),
+            BackgroundColor3=palette.card,TextColor3=palette.text,
+            PlaceholderText="#102333",PlaceholderColor3=palette.muted,
+            Text=activeHex or "",BorderSizePixel=0,
+            Font=Enum.Font.Code,TextSize=14,ClearTextOnFocus=false
+        },page)
+        corner(box,7)
+        local apply=button(page,L("ПРИМЕНИТЬ", "APPLY"),116,32,function()
+            if not setSurfaceColor(section,box.Text) then
+                info(L("Нужен тёмный HEX-цвет (#RRGGBB), чтобы текст читался.",
+                    "Use a dark HEX color (#RRGGBB) to keep labels readable."),true)
+            else
+                info(L("Цвет панели изменён.","Panel color updated."))
+            end
+        end,true)
+        apply.Position=UDim2.fromOffset(216,y+76)
+        local reset=button(page,L("КАК В ТЕМЕ", "USE THEME"),146,32,function()
+            resetSurfaceColor(section)
+            info(L("Панель снова следует выбранной теме.","Panel now follows the selected theme."))
+        end,false)
+        reset.Position=UDim2.fromOffset(346,y+76)
+    end
+    drawPanelControl("header",496,"ВЕРХНЯЯ ПАНЕЛЬ","TOP BAR")
+    drawPanelControl("sidebar",638,"БОКОВАЯ ПАНЕЛЬ","SIDEBAR")
+    local colorTip=txt(page,L("Доступны тёмные HEX-цвета: белый текст остаётся читаемым. Логотип не меняется.",
+        "Dark HEX colors only to preserve text contrast. The fern logo stays unchanged."),11,palette.muted,28)
+    colorTip.Position=UDim2.fromOffset(0,757)
+
     local foliageToggle=button(page,showFoliage and L("ЛИСТВА: ВКЛ", "FOLIAGE: ON")
         or L("ЛИСТВА: ВЫКЛ", "FOLIAGE: OFF"),206,34,function()
         setFoliageVisible(not showFoliage)
         if alive then render() end
     end,showFoliage)
-    foliageToggle.Position=UDim2.fromOffset(0,438)
+    foliageToggle.Position=UDim2.fromOffset(0,787)
     local foliageInfo=txt(page,L("Декоративные папоротники по краям. Логотип останется.",
         "Decorative corner ferns; the logo stays visible."),12,palette.muted,32)
-    foliageInfo.Position=UDim2.fromOffset(222,438)
+    foliageInfo.Position=UDim2.fromOffset(222,787)
     foliageInfo.Size=UDim2.new(1,-230,0,32)
 
     local rememberHeading=txt(page,T("rememberTitle"),16,palette.text,28)
     rememberHeading.Font=Enum.Font.GothamBold
-    rememberHeading.Position=UDim2.fromOffset(0,496)
+    rememberHeading.Position=UDim2.fromOffset(0,845)
     local rememberToggle=button(page,rememberMe and T("rememberOn") or T("rememberOff"),246,38,function()
         if not supportsSessionFiles then info(T("rememberUnavailable"),true);return end
         if rememberMe then
@@ -1779,29 +1878,29 @@ local function renderSettings()
         end
         if alive then render() end
     end,rememberMe)
-    rememberToggle.Position=UDim2.fromOffset(0,531)
+    rememberToggle.Position=UDim2.fromOffset(0,880)
     if not supportsSessionFiles then
         rememberToggle.Active=false
         rememberToggle.AutoButtonColor=false
     end
     local rememberDesc=txt(page,T("rememberHint"),12,palette.muted,34)
-    rememberDesc.Position=UDim2.fromOffset(261,533)
+    rememberDesc.Position=UDim2.fromOffset(261,882)
     rememberDesc.Size=UDim2.new(1,-270,0,34)
     local rememberWarning=txt(page,T("rememberWarning"),11,palette.alert,32)
-    rememberWarning.Position=UDim2.fromOffset(0,575)
+    rememberWarning.Position=UDim2.fromOffset(0,924)
     rememberWarning.Size=UDim2.new(1,-15,0,32)
     local recentHint=txt(page,T("recentWarning"),11,palette.alert,34)
-    recentHint.Position=UDim2.fromOffset(0,604)
+    recentHint.Position=UDim2.fromOffset(0,953)
     recentHint.Size=UDim2.new(1,-15,0,34)
     recentHint.TextWrapped=true
     local hideHint=txt(page,T("hide"),13,palette.muted,28)
-    hideHint.Position=UDim2.fromOffset(0,650)
+    hideHint.Position=UDim2.fromOffset(0,999)
     local exit=button(page,T("exit"),260,39,function()
         if global.__PaporotnicLauncherStop then global.__PaporotnicLauncherStop() end
     end,false)
-    exit.Position=UDim2.fromOffset(0,681)
+    exit.Position=UDim2.fromOffset(0,1030)
     local note=txt(page,T("note"),12,palette.muted,36)
-    note.Position=UDim2.fromOffset(0,723)
+    note.Position=UDim2.fromOffset(0,1072)
     note.Size=UDim2.new(1,-15,0,32)
 end
 
@@ -1836,8 +1935,8 @@ function render()
         premiumHeaderType.Text=lifetime and "👑 LIFETIME" or T("dashboardTemporary")
         premiumHeaderType.TextColor3=lifetime and Color3.fromRGB(255,207,82)
             or Color3.fromRGB(218,221,229)
-        premiumHeaderType.Font=Enum.Font.GothamMedium
-        premiumHeaderType.TextSize=11
+        premiumHeaderType.Font=Enum.Font.GothamBold
+        premiumHeaderType.TextSize=12
     end
     if selectedTab=="games" then renderGames()
     elseif selectedTab=="releases" then renderReleases()
@@ -1876,7 +1975,9 @@ dashboardWallpaper=create("ImageLabel",{
 attachLayer(dashboardWallpaper,"wallpaper")
 
 local top=create("Frame",{Size=UDim2.new(1,0,0,77),Active=true,
-    BackgroundColor3=palette.background,BorderSizePixel=0},root)
+    BackgroundColor3=palette.headerSurface,BorderSizePixel=0},root)
+-- Explicit binding avoids ambiguous matching when panel color equals background.
+themeBindings[top]={BackgroundColor3="headerSurface"}
 -- Fine green bottom accent, mirroring the reference's lime header line.
 create("Frame",{Position=UDim2.fromOffset(0,75),Size=UDim2.new(1,0,0,2),
     BackgroundColor3=palette.border,BorderSizePixel=0},top)
@@ -1917,7 +2018,7 @@ local function headerChip(textValue,x,w)
 end
 local stateChip,stateText=headerChip("●  ACCESS VERIFIED",326,170)
 local apiChip,apiText=headerChip("KEY SYSTEM",510,139)
-local buildChip,buildText=headerChip("HUB  v0.2.30",663,150)
+local buildChip,buildText=headerChip("HUB  v0.2.31",663,150)
 
 local profile=create("Frame",{Position=UDim2.new(1,-333,0,9),Size=UDim2.fromOffset(189,58),
     BackgroundColor3=palette.panel,BorderSizePixel=0},top)
@@ -1948,8 +2049,9 @@ close.TextSize=24
 
 local sidebar=create("Frame",{
     Name="DashboardSidebar",Position=UDim2.fromOffset(0,77),
-    Size=UDim2.new(0,224,1,-77),BackgroundColor3=palette.background,
+    Size=UDim2.new(0,224,1,-77),BackgroundColor3=palette.sidebarSurface,
     BorderSizePixel=0},root)
+themeBindings[sidebar]={BackgroundColor3="sidebarSurface"}
 create("Frame",{Position=UDim2.new(1,-1,0,0),Size=UDim2.new(0,1,1,0),
     BackgroundColor3=palette.border,BorderSizePixel=0},sidebar)
 sidebar.ClipsDescendants=true
@@ -1968,33 +2070,25 @@ create("UIGradient",{Rotation=90,Transparency=NumberSequence.new({
 local navOptions={
     {"home",nil,"  ","home"},
     {"games","games","  ","dashboardShortGames"},
-    {"games","games","   ","scriptsGame"},
-    {"games","universal","   ","scriptsUniversal"},
+    {"games","universal","  ","scriptsUniversal"},
     {"releases",nil,"  ","releases"},
     {"settings",nil,"  ","settings"}
 }
-local scriptsGroup=txt(sidebar,"SCRIPTS",11,palette.muted,25)
-scriptsGroup.Position=UDim2.fromOffset(26,140)
-scriptsGroup.Size=UDim2.fromOffset(164,25)
-scriptsGroup.Font=Enum.Font.GothamBold
 for i,row in ipairs(navOptions) do
     local page,category,icon,labelKey=row[1],row[2],row[3],row[4]
-    local positions={22,80,177,236,305,363}
-    local y=positions[i]
+    local positions={22,80,138,196,254}
     local nav=button(sidebar,icon..T(labelKey),197,i==1 and 48 or 42,function()
         navigateTo(page,category)
     end,false)
     nav.Name="Sidebar_"..(category or page)
-    nav.TextSize=(i==3 or i==4) and 11 or 13
-    nav.Position=UDim2.fromOffset(13,y)
+    nav.TextSize=13
+    nav.Position=UDim2.fromOffset(13,positions[i])
     nav.TextXAlignment=Enum.TextXAlignment.Left
-    create("UIPadding",{PaddingLeft=UDim.new(0,(i==3 or i==4) and 30 or 14)},nav)
+    create("UIPadding",{PaddingLeft=UDim.new(0,14)},nav)
     corner(nav,9)
-    -- Game Scripts and Games share a destination; main Games stays as a
-    -- conventional navigation entry while the subtab highlights the category.
     table.insert(sidebarButtons,{button=nav,page=page,category=category,prefix=icon,labelKey=labelKey})
 end
-local separator=create("Frame",{Position=UDim2.fromOffset(14,419),Size=UDim2.fromOffset(194,1),
+local separator=create("Frame",{Position=UDim2.fromOffset(14,315),Size=UDim2.fromOffset(194,1),
     BackgroundColor3=palette.border,BorderSizePixel=0},sidebar)
 
 -- No duplicated "YOUR ACCESS" summary here: the top profile and right-hand
@@ -2048,7 +2142,7 @@ renderRightRail=function()
     for _,child in ipairs(rightRail:GetChildren()) do child:Destroy() end
     local L=function(ru,en) return lang=="ru" and ru or en end
     local access=rrPanel(0,184)
-    rrLabel(access,"♛  "..L("Доступ","Access Status"),16,palette.text,13,10,180,29,true)
+    rrLabel(access,L("Доступ","Access Status"),16,palette.text,13,10,180,29,true)
     local active=create("Frame",{Position=UDim2.fromOffset(215,14),Size=UDim2.fromOffset(66,22),
         BackgroundColor3=palette.highlight,BackgroundTransparency=0.83,BorderSizePixel=0},access)
     corner(active,12)
@@ -2071,9 +2165,9 @@ renderRightRail=function()
             labelColor=approvedKeyKind=="temporary" and Color3.fromRGB(218,221,229)
                 or Color3.fromRGB(255,207,82)
         end
-        local v=rrLabel(access,r[2],i==1 and 12 or 11,labelColor,161,y,120,22,true)
+        local v=rrLabel(access,r[2],i==1 and 13 or 11,labelColor,161,y,120,22,true)
         v.TextXAlignment=Enum.TextXAlignment.Right
-        if i==1 then v.Font=Enum.Font.GothamMedium end
+        if i==1 then v.Font=Enum.Font.GothamBold end
         if i~=4 then
             create("Frame",{Position=UDim2.fromOffset(14,y+27),Size=UDim2.fromOffset(267,1),
                 BackgroundColor3=palette.border,BackgroundTransparency=0.55,BorderSizePixel=0},access)
@@ -2105,10 +2199,10 @@ renderRightRail=function()
     local updates=rrPanel(485,150)
     rrLabel(updates,"↻  "..L("Обновления","Latest Updates"),15,palette.text,13,8,250,28,true)
     local recent={
+        {"v0.2.31",L("Настройка панелей","Panel Colors")},
         {"v0.2.30",L("Полировка интерфейса","UI Polish")},
         {"v0.2.29",L("Библиотека игр 2.0","Game Library 2.0")},
         {"v0.2.28",L("Редактор оформления","Theme Editor")},
-        {"v0.2.27",L("Слои и графика","Layered Visual Fix")},
     }
     for i,r in ipairs(recent) do
         local y=40+(i-1)*26
@@ -2601,4 +2695,4 @@ local function playLaunchIntro()
 end
 
 task.spawn(playLaunchIntro)
-print("[Paporotnic Universal Launcher] v0.2.30 | PlaceId="..tostring(game.PlaceId))
+print("[Paporotnic Universal Launcher] v0.2.31 | PlaceId="..tostring(game.PlaceId))
