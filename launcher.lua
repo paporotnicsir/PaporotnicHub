@@ -1,4 +1,4 @@
--- PAPOROTNIC HUB | universal launcher v0.2.28
+-- PAPOROTNIC HUB | universal launcher v0.2.29
 -- 3-second loading gate, key-only entry, and quiet accent-glow interface.
 -- Based on the user's v0.2.14 launcher; auth API and game module flow preserved.
 
@@ -44,7 +44,7 @@ local function premiumImageId(value)
 end
 
 local FALLBACK = {
-    version = "0.2.28 (offline catalog)",
+    version = "0.2.29 (offline catalog)",
     latestVersion = "Paporotnic Hub Core v0.2.8",
     lifetimePrice = "$ ?? / TBA",
     announcement = "Welcome, LIL Paporotnics! The universal hub is online.",
@@ -59,6 +59,9 @@ local FALLBACK = {
             id = "release-020", version = "v0.2.0", name = "Launcher redesign",
             summary = "Larger interface, fern background and a dedicated Releases page.",
             updates = {
+                {version = "v0.2.29", title = "Game Library 2.0 · game details",
+                  body = "A catalog-driven game library with a focused game page, real metadata, listed features, compatibility status, and a safe Launch button. No placeholder games.",
+                  bodyRu = "Библиотека игр из каталога с отдельной страницей игры, настоящими данными, описанием возможностей и проверкой совместимости перед запуском. Никаких выдуманных игр."},
                 {version = "v0.2.28", title = "Theme Editor · custom accents",
                   body = "Added editable accent colors with six presets, hex entry, a reset button and an optional foliage toggle. Preferences save locally when supported.",
                   bodyRu = "Редактор цвета акцента: шесть готовых цветов, ввод HEX, сброс к стандартному и переключатель декоративной листвы. Настройки сохраняются локально при поддержке исполнителем."},
@@ -222,7 +225,7 @@ local strings = {
         releaseSub="Новости и изменения Paporotnic Hub", totalGames="Игр в каталоге", authState="Статус доступа",
         accessPublic="PUBLIC / TEST", accessGranted="Ключ активирован", accessNeed="Ожидает ключ",
         patches="ПОДОБНОВЛЕНИЙ", expandedHint="Нажми на релиз, чтобы увидеть изменения",
-        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.28",
+        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.29",
         themeHeading="ТЕМА ОФОРМЛЕНИЯ", themeHint="Изменения применяются сразу. Сохранение работает, если исполнитель поддерживает запись файлов.",
         themeForest="ЛЕСНАЯ", themeOcean="НОЧНОЙ ОКЕАН", themeEmber="ЗАКАТ", themeViolet="ФИОЛЕТОВАЯ", themeActive="ВЫБРАНО",
          gateSubtitle="Для доступа к хабу требуется ключ", gateIdle="Введите ключ для продолжения.",
@@ -289,7 +292,7 @@ local strings = {
         releaseSub="News and changes for Paporotnic Hub", totalGames="Games in catalog", authState="Access status",
         accessPublic="PUBLIC / TEST", accessGranted="Key activated", accessNeed="Awaiting key",
         patches="PATCHES", expandedHint="Click a release to view its updates",
-        releaseBuild="LAUNCHER BUILD: v0.2.28",
+        releaseBuild="LAUNCHER BUILD: v0.2.29",
         themeHeading="COLOR THEME", themeHint="Themes apply instantly. Saving needs executor file access.",
         themeForest="FOREST", themeOcean="NIGHT OCEAN", themeEmber="SUNSET", themeViolet="VIOLET", themeActive="ACTIVE",
          gateSubtitle="An access key is required to continue", gateIdle="Enter your key to continue.",
@@ -467,6 +470,7 @@ local authenticated = false
 local approvedKeyKind = nil -- "temporary" or "lifetime", confirmed by the VPS response.
 local authMode = "server"  -- fail closed, even with an offline or stale catalog
 local selectedTab = "home"
+local selectedGameDetailsId = nil -- UI-only selection, always resolved from catalog.json
 local scriptCategory = "games" -- Game Scripts / Universal Scripts
 local universalRunning = false
 local statusText = ""
@@ -1082,6 +1086,7 @@ local function renderHome()
             if featured then launch(featured) else navigateTo("games","games") end
         end,true)
     callToAction(hero,L("ПОДРОБНЕЕ","DETAILS"),199,184,123,function()
+        selectedGameDetailsId=featured and featured.id or nil
         navigateTo("games","games")
     end,false)
     local version=block(hero,UDim2.new(1,-139,1,-47),UDim2.fromOffset(121,31),palette.background,9)
@@ -1125,7 +1130,10 @@ local function renderHome()
         local gameStatus=textAt(tile,state,9,palette.highlight,10,132,154,16,true)
         gameStatus.Size=UDim2.new(1,-20,0,16)
         local tap=create("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1)},tile)
-        connect(tap.MouseButton1Click,function() navigateTo("games","games") end)
+        connect(tap.MouseButton1Click,function()
+            selectedGameDetailsId=item.id
+            navigateTo("games","games")
+        end)
     end
     if #games==0 then
         textAt(gallery,L("Игры скоро появятся","Games coming soon"),14,palette.muted,14,28,450,34,false)
@@ -1161,78 +1169,277 @@ local function renderHome()
 end
 
 local function renderGameScripts(panel)
-    local heading=txt(panel,T("supported"),22,palette.text,38)
-    heading.Font=Enum.Font.GothamBold
-    heading.Size=UDim2.new(1,-348,0,38)
+    local L = function(ru,en) return lang=="ru" and ru or en end
 
-    local searchWrap=create("Frame",{
-        Position=UDim2.new(1,-330,0,1), Size=UDim2.fromOffset(330,38),
-        BackgroundColor3=palette.card, BorderSizePixel=0
-    },panel)
-    corner(searchWrap,9)
-    create("UIStroke",{Thickness=1,Color=palette.border,Transparency=0.2},searchWrap)
-    createMagnifier(searchWrap, UDim2.fromOffset(11,10))
+    -- Game Library 2.0: no invented modules, ratings or compatibility numbers.
+    -- Every item shown here is read from catalog.json (or the offline fallback).
+    local list={}
+    for _,item in ipairs(catalog.games or {}) do
+        if type(item)=="table" then table.insert(list,item) end
+    end
+    local selected=nil
+    if selectedGameDetailsId~=nil then
+        for _,item in ipairs(list) do
+            if item.id==selectedGameDetailsId then selected=item;break end
+        end
+        if not selected then selectedGameDetailsId=nil end
+    end
+    local function surface(parent,pos,size,col,radius)
+        local f=create("Frame",{
+            Position=pos or UDim2.fromOffset(0,0),
+            Size=size or UDim2.new(1,0,0,100),BackgroundColor3=col or palette.panel,
+            BorderSizePixel=0,ClipsDescendants=true
+        },parent)
+        corner(f,radius or 12)
+        return f
+    end
+    local function border(f,color,alpha)
+        create("UIStroke",{Color=color or palette.border,Thickness=1,Transparency=alpha or 0.5},f)
+    end
+    local function caption(parent,label,x,y,w,h,fontSize,color,bold)
+        local t=txt(parent,label,fontSize or 13,color or palette.text,h or 24)
+        t.Position=UDim2.fromOffset(x,y)
+        t.Size=UDim2.new(1,-x-(w or 0),0,h or 24)
+        t.TextYAlignment=Enum.TextYAlignment.Center
+        t.TextTruncate=Enum.TextTruncate.AtEnd
+        if bold then t.Font=Enum.Font.GothamBold end
+        return t
+    end
+    local function simpleLabel(parent,label,pos,size,textSize,color,bold)
+        local t=txt(parent,label,textSize or 12,color or palette.text,24)
+        t.Position=pos
+        t.Size=size
+        t.TextTruncate=Enum.TextTruncate.AtEnd
+        if bold then t.Font=Enum.Font.GothamBold end
+        return t
+    end
+    local function gameThumb(parent,item,pos,size)
+        local holder=surface(parent,pos,size,palette.card,12)
+        create("UIGradient",{Rotation=35,Color=ColorSequence.new({
+            ColorSequenceKeypoint.new(0,palette.card),
+            ColorSequenceKeypoint.new(.6,palette.panel),
+            ColorSequenceKeypoint.new(1,palette.background)
+        })},holder)
+        local ring=surface(holder,UDim2.new(.5,-45,.5,-45),UDim2.fromOffset(90,90),palette.highlight,45)
+        ring.BackgroundTransparency=.92
+        border(ring,palette.highlight,.55)
+        local first=tostring(item.title or "G"):sub(1,1):upper()
+        local letter=simpleLabel(ring,first,UDim2.fromScale(0,0),UDim2.fromScale(1,1),36,palette.highlight,true)
+        letter.TextXAlignment=Enum.TextXAlignment.Center
+        local universe=tonumber(item.universeId)
+        if universe and universe>0 then
+            create("ImageLabel",{
+                Name="OptionalGameThumbnail",Size=UDim2.fromScale(1,1),
+                BackgroundTransparency=1,BorderSizePixel=0,
+                Image="rbxthumb://type=GameIcon&id="..tostring(math.floor(universe)).."&w=420&h=420",
+                ScaleType=Enum.ScaleType.Crop,ImageTransparency=.04
+            },holder)
+        end
+        return holder
+    end
+    local function featureList(item)
+        -- Catalog wording is descriptive metadata, NOT a claim of tested support.
+        local result={}
+        local description=type(item.description)=="string" and item.description or ""
+        for part in string.gmatch(description,"[^,;]+") do
+            part=part:match("^%s*(.-)%s*$")
+            if part and #part>0 and #part<=60 then
+                table.insert(result,part)
+            end
+            if #result>=10 then break end
+        end
+        return result
+    end
+    local function openDetails(item)
+        if type(item.id)=="string" then
+            selectedGameDetailsId=item.id
+            navigateTo("games","games")
+        end
+    end
+    local function launchButton(parent,item,label,pos,w,h)
+        local ready=item.enabled~=false and isSupported(item)
+        local b=button(parent,label,w,h,function() launch(item) end,ready)
+        b.Position=pos
+        b.TextSize=12
+        if not ready then
+            b.BackgroundColor3=palette.card
+            b.TextColor3=palette.muted
+        end
+        return b
+    end
+
+    if selected then
+        -- Dedicated details page, using a scroll area so feature text never clips.
+        local back=button(panel,L("‹  К БИБЛИОТЕКЕ","‹  BACK TO LIBRARY"),190,34,function()
+            selectedGameDetailsId=nil
+            navigateTo("games","games")
+        end,false)
+        back.Position=UDim2.fromOffset(0,0)
+        back.TextSize=12
+        local topRight=simpleLabel(panel,L("КАРТОЧКА ИГРЫ","GAME PROFILE"),
+            UDim2.new(1,-280,0,0),UDim2.fromOffset(270,34),12,palette.muted,true)
+        topRight.TextXAlignment=Enum.TextXAlignment.Right
+        local scroll=create("ScrollingFrame",{
+            Position=UDim2.fromOffset(0,45),Size=UDim2.new(1,0,1,-45),
+            BackgroundTransparency=1,BorderSizePixel=0,ScrollBarThickness=4,
+            ScrollBarImageColor3=palette.highlight,CanvasSize=UDim2.fromOffset(0,690),
+            ScrollingDirection=Enum.ScrollingDirection.Y
+        },panel)
+        local hero=surface(scroll,UDim2.fromOffset(0,0),UDim2.new(1,-8,0,236),palette.panel,15)
+        border(hero,palette.border,.34)
+        create("UIGradient",{Rotation=0,Color=ColorSequence.new({
+            ColorSequenceKeypoint.new(0,Color3.fromRGB(13,31,24)),
+            ColorSequenceKeypoint.new(.58,palette.panel),
+            ColorSequenceKeypoint.new(1,Color3.fromRGB(37,27,51))
+        })},hero)
+        local icon=gameThumb(hero,selected,UDim2.new(1,-232,0,20),UDim2.fromOffset(207,196))
+        border(icon,palette.highlight,.58)
+        local pre=simpleLabel(hero,L("ИГРОВОЙ МОДУЛЬ  /  PAPOROTNIC","GAME MODULE  /  PAPOROTNIC"),
+            UDim2.fromOffset(24,21),UDim2.new(1,-275,0,24),11,palette.highlight,true)
+        local heading=simpleLabel(hero,tostring(selected.title or "Game"),
+            UDim2.fromOffset(24,50),UDim2.new(1,-270,0,60),27,palette.text,true)
+        heading.TextWrapped=true
+        local teaser=simpleLabel(hero,tostring(selected.description or ""),
+            UDim2.fromOffset(24,117),UDim2.new(1,-277,0,35),13,palette.muted,false)
+        teaser.TextWrapped=true
+        local label=(selected.enabled==false)
+            and L("● МОДУЛЬ ОТКЛЮЧЁН","● MODULE DISABLED")
+            or (isSupported(selected) and L("● ТЕКУЩИЙ ПЛЕЙС","● CURRENT PLACE")
+                or L("● ОТКРОЙ НУЖНУЮ ИГРУ","● OPEN SUPPORTED GAME"))
+        simpleLabel(hero,label,UDim2.fromOffset(24,164),UDim2.new(1,-290,0,25),
+            12,isSupported(selected) and selected.enabled~=false and palette.highlight or palette.muted,true)
+        launchButton(hero,selected,L("▶  ЗАПУСТИТЬ","▶  LAUNCH"),UDim2.fromOffset(24,193),165,36)
+        local verifyNote=simpleLabel(hero,L("Проверка ключа через VPS перед запуском","VPS key check before launch"),
+            UDim2.fromOffset(202,196),UDim2.new(1,-477,0,28),11,palette.muted,false)
+
+        -- Verifiable game facts only (no fake player count or made-up updates).
+        local metadata={
+            {L("ВЕРСИЯ МОДУЛЯ","MODULE VERSION"),tostring(selected.version or "—")},
+            {L("ДОСТУПНОСТЬ","AVAILABILITY"),selected.enabled==false and L("Выключен","Disabled") or L("В каталоге","Listed")},
+            {L("ПЛЕЙСОВ В КАТАЛОГЕ","CATALOG PLACES"),
+                tostring(type(selected.placeIds)=="table" and #selected.placeIds or 0)}
+        }
+        local metaBox=surface(scroll,UDim2.fromOffset(0,251),UDim2.new(1,-8,0,87),palette.panel,12)
+        border(metaBox,palette.border,.54)
+        for i,data in ipairs(metadata) do
+            local cell=surface(metaBox,UDim2.new((i-1)/3,8,0,8),UDim2.new(1/3,-16,1,-16),palette.card,9)
+            simpleLabel(cell,data[1],UDim2.fromOffset(12,8),UDim2.new(1,-22,0,22),10,palette.muted,true)
+            simpleLabel(cell,data[2],UDim2.fromOffset(12,34),UDim2.new(1,-22,0,26),17,palette.text,true)
+        end
+
+        local features=featureList(selected)
+        simpleLabel(scroll,L("ВОЗМОЖНОСТИ ИЗ КАТАЛОГА","FEATURES LISTED IN CATALOG"),
+            UDim2.fromOffset(2,355),UDim2.new(1,-18,0,28),17,palette.text,true)
+        local featureRows=math.max(1,math.ceil(#features/2))
+        local featureY=391
+        local featureArea=surface(scroll,UDim2.fromOffset(0,featureY),
+            UDim2.new(1,-8,0,featureRows*49+14),palette.background,11)
+        featureArea.BackgroundTransparency=1
+        if #features==0 then
+            simpleLabel(featureArea,L("Описание возможностей ещё не добавлено в catalog.json.",
+                "No feature description supplied in catalog.json yet."),
+                UDim2.fromOffset(9,8),UDim2.new(1,-20,0,28),13,palette.muted,false)
+        else
+            for i,feature in ipairs(features) do
+                local col=(i-1)%2
+                local row=math.floor((i-1)/2)
+                local tag=surface(featureArea,UDim2.new(col*.5,8,0,row*49+6),
+                    UDim2.new(.5,-16,0,39),palette.card,10)
+                border(tag,palette.border,.55)
+                local dot=surface(tag,UDim2.fromOffset(13,16),UDim2.fromOffset(7,7),palette.highlight,4)
+                simpleLabel(tag,feature,UDim2.fromOffset(28,4),UDim2.new(1,-39,0,30),12,palette.text,true)
+            end
+        end
+        local noteY=featureY+featureRows*49+25
+        local noteBox=surface(scroll,UDim2.fromOffset(0,noteY),UDim2.new(1,-8,0,83),palette.panel,12)
+        border(noteBox,palette.border,.58)
+        simpleLabel(noteBox,L("ПЕРЕД ЗАПУСКОМ","BEFORE LAUNCH"),
+            UDim2.fromOffset(14,8),UDim2.new(1,-26,0,21),12,palette.highlight,true)
+        local note=simpleLabel(noteBox,L(
+            "Запусти поддерживаемый плейс Roblox. Если он не совпадает или модуль выключен, запуск будет отклонён. Ключ проверяется сервером повторно.",
+            "Open a supported Roblox place. Wrong place or disabled module blocks launch. Your key is checked by the server again."),
+            UDim2.fromOffset(14,30),UDim2.new(1,-28,0,44),12,palette.muted,false)
+        note.TextWrapped=true
+        scroll.CanvasSize=UDim2.fromOffset(0,noteY+100)
+        return
+    end
+
+    -- Catalog overview. One real game now; new entries appear automatically.
+    local heading=txt(panel,L("БИБЛИОТЕКА ИГР","GAME LIBRARY"),24,palette.text,36)
+    heading.Font=Enum.Font.GothamBold
+    heading.Size=UDim2.new(1,-372,0,38)
+    local count=simpleLabel(panel,L("ИГР В КАТАЛОГЕ: ","GAMES IN CATALOG: ")..tostring(#list),
+        UDim2.new(1,-209,0,3),UDim2.fromOffset(200,26),11,palette.highlight,true)
+    count.TextXAlignment=Enum.TextXAlignment.Right
+    local description=txt(panel,L("Только реальные модули из catalog.json — без заглушек и выдуманных игр.",
+        "Real modules from catalog.json only. No dummy game cards."),12,palette.muted,29)
+    description.Position=UDim2.fromOffset(1,40)
+    description.Size=UDim2.new(1,-12,0,28)
+
+    local searchWrap=surface(panel,UDim2.fromOffset(0,84),UDim2.new(1,-8,0,43),palette.card,10)
+    border(searchWrap,palette.border,.48)
+    createMagnifier(searchWrap,UDim2.fromOffset(15,13))
     local searchBox=create("TextBox",{
-        Position=UDim2.fromOffset(34,0), Size=UDim2.new(1,-42,1,0),
-        BackgroundTransparency=1, BorderSizePixel=0,
-        ClearTextOnFocus=false, Text="", PlaceholderText=T("searchHint"),
-        Font=Enum.Font.Gotham, TextSize=14,
-        TextColor3=palette.text, PlaceholderColor3=palette.muted,
+        Position=UDim2.fromOffset(45,0),Size=UDim2.new(1,-61,1,0),
+        BackgroundTransparency=1,BorderSizePixel=0,
+        ClearTextOnFocus=false,Text="",PlaceholderText=T("searchHint"),
+        Font=Enum.Font.Gotham,TextSize=14,
+        TextColor3=palette.text,PlaceholderColor3=palette.muted,
         TextXAlignment=Enum.TextXAlignment.Left
     },searchWrap)
-
     local scroll=create("ScrollingFrame",{
-        Size=UDim2.new(1,0,1,-48),Position=UDim2.fromOffset(0,45),
-        BackgroundTransparency=1,ScrollBarThickness=4,BorderSizePixel=0,
-        AutomaticCanvasSize=Enum.AutomaticSize.Y,CanvasSize=UDim2.new(0,0,0,0),
+        Position=UDim2.fromOffset(0,141),Size=UDim2.new(1,0,1,-141),
+        BackgroundTransparency=1,BorderSizePixel=0,ScrollBarThickness=4,
+        ScrollBarImageColor3=palette.highlight,
+        AutomaticCanvasSize=Enum.AutomaticSize.Y,CanvasSize=UDim2.fromOffset(0,0),
         ScrollingDirection=Enum.ScrollingDirection.Y
     },panel)
-    stack(scroll,12)
-    if not catalog.games or #catalog.games == 0 then txt(scroll,T("noGames"),14,palette.muted,28); return end
-
+    stack(scroll,14)
     local rows={}
-    for _,item in ipairs(catalog.games or {}) do
-        if type(item)=="table" then
-            local row=card(scroll,130)
-            local thumb=create("ImageLabel",{
-                Position=UDim2.fromOffset(4,10),Size=UDim2.fromOffset(92,92),
-                BackgroundColor3=palette.card,BorderSizePixel=0,
-                Image=(type(item.universeId)=="number") and ("rbxthumb://type=GameIcon&id="..item.universeId.."&w=150&h=150") or ""
-            },row)
-            corner(thumb,12)
-            local x=110
-            local title=txt(row,item.title or "Unknown",18,palette.text,28)
-            title.Font=Enum.Font.GothamBold
-            title.Position=UDim2.fromOffset(x,0)
-            title.Size=UDim2.new(1,-116,0,28)
-            local desc=txt(row,item.description or "",12,palette.muted,34)
-            desc.Position=UDim2.fromOffset(x,30)
-            desc.Size=UDim2.new(1,-116,0,34)
-            local gameState = isSupported(item) and T("current") or T("other")
-            local marker=txt(row,gameState.." • "..tostring(item.version or ""),12, isSupported(item) and palette.highlight or palette.muted,19)
-            marker.Position=UDim2.fromOffset(x,68)
-            marker.Size=UDim2.new(1,-134,0,19)
-            local startBtn=button(row,T("start"),140,34,function() launch(item) end,isSupported(item))
-            startBtn.Position=UDim2.new(1,-140,1,-34)
-            table.insert(rows, {frame=row, searchText=string.lower(table.concat({tostring(item.title or ""), tostring(item.description or ""), tostring(item.id or "")}, " "))})
-        end
+    for _,item in ipairs(list) do
+        local row=surface(scroll,nil,UDim2.new(1,-8,0,195),palette.panel,14)
+        border(row,palette.border,.38)
+        gameThumb(row,item,UDim2.fromOffset(12,12),UDim2.fromOffset(183,171))
+        local current=isSupported(item)
+        local allowed=item.enabled~=false
+        local badge=surface(row,UDim2.fromOffset(211,14),UDim2.fromOffset(162,24),palette.card,7)
+        simpleLabel(badge,allowed and (current and L("● ТЕКУЩИЙ ПЛЕЙС","● CURRENT PLACE")
+            or L("● В КАТАЛОГЕ","● IN CATALOG")) or L("● ОТКЛЮЧЁН","● DISABLED"),
+            UDim2.fromOffset(10,0),UDim2.new(1,-20,1,0),10,
+            allowed and current and palette.highlight or palette.muted,true)
+        local title=simpleLabel(row,tostring(item.title or "Unknown"),
+            UDim2.fromOffset(211,46),UDim2.new(1,-230,0,32),22,palette.text,true)
+        local desc=simpleLabel(row,tostring(item.description or ""),
+            UDim2.fromOffset(211,87),UDim2.new(1,-235,0,35),13,palette.muted,false)
+        desc.TextWrapped=true
+        local version=simpleLabel(row,L("ВЕРСИЯ ","VERSION ")..tostring(item.version or "—"),
+            UDim2.fromOffset(211,126),UDim2.fromOffset(190,24),11,palette.highlight,true)
+        local details=button(row,L("ПОДРОБНЕЕ","DETAILS"),138,36,function() openDetails(item) end,false)
+        details.Position=UDim2.new(1,-309,1,-48)
+        details.TextSize=12
+        launchButton(row,item,L("▶ ЗАПУСТИТЬ","▶ LAUNCH"),UDim2.new(1,-160,1,-48),147,36)
+        table.insert(rows,{frame=row,text=string.lower(table.concat({
+            tostring(item.title or ""),tostring(item.description or ""),tostring(item.id or "")}," "))})
     end
-    local noResults=txt(scroll,T("noSearchResults"),14,palette.muted,36)
-    noResults.Visible=false
-    local function applySearch()
-        local query=string.lower(searchBox.Text):gsub("^%s+", ""):gsub("%s+$", "")
-        local count=0
+    local empty=txt(scroll,#list==0 and T("noGames") or T("noSearchResults"),14,palette.muted,40)
+    empty.Visible=(#list==0)
+    local function filter()
+        local query=string.lower(searchBox.Text):gsub("^%s+",""):gsub("%s+$","")
+        local visible=0
         for _,entry in ipairs(rows) do
-            local matches=(query=="") or (string.find(entry.searchText, query, 1, true) ~= nil)
-            entry.frame.Visible=matches
-            if matches then count=count+1 end
+            local match=(query=="") or (string.find(entry.text,query,1,true)~=nil)
+            entry.frame.Visible=match
+            if match then visible=visible+1 end
         end
-        noResults.Visible=(count==0)
+        empty.Visible=visible==0
     end
-    connect(searchBox:GetPropertyChangedSignal("Text"),applySearch)
-    applySearch()
+    connect(searchBox:GetPropertyChangedSignal("Text"),filter)
+    filter()
+    if not catalogOk then
+        local note=txt(panel,T("offline"),11,palette.alert,23)
+        note.Position=UDim2.new(0,0,1,-24)
+    end
 end
-
 
 local function renderUniversalScripts(panel)
     local heading=txt(panel,T("universalTitle"),22,palette.text,38)
@@ -1678,7 +1885,7 @@ local function headerChip(textValue,x,w)
 end
 local stateChip,stateText=headerChip("●  ACCESS VERIFIED",326,170)
 local apiChip,apiText=headerChip("KEY SYSTEM",510,139)
-local buildChip,buildText=headerChip("HUB  v0.2.28",663,150)
+local buildChip,buildText=headerChip("HUB  v0.2.29",663,150)
 
 local profile=create("Frame",{Position=UDim2.new(1,-333,0,9),Size=UDim2.fromOffset(189,58),
     BackgroundColor3=palette.panel,BorderSizePixel=0},top)
@@ -1870,6 +2077,7 @@ renderRightRail=function()
     local updates=rrPanel(485,150)
     rrLabel(updates,"↻  "..L("Обновления","Latest Updates"),15,palette.text,13,8,250,28,true)
     local recent={
+        {"v0.2.29",L("Game Library 2.0","Game Library 2.0")},
         {"v0.2.28",L("Редактор оформления","Theme Editor")},
         {"v0.2.27",L("Слои и графика","Layered Visual Fix")},
         {"v0.2.26",L("Чистый интерфейс","Clean Rework")},
@@ -2361,4 +2569,4 @@ local function playLaunchIntro()
 end
 
 task.spawn(playLaunchIntro)
-print("[Paporotnic Universal Launcher] v0.2.28 | PlaceId="..tostring(game.PlaceId))
+print("[Paporotnic Universal Launcher] v0.2.29 | PlaceId="..tostring(game.PlaceId))
