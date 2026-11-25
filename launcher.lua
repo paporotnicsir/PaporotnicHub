@@ -1,4 +1,4 @@
--- PAPOROTNIC HUB | universal launcher v0.2.22
+-- PAPOROTNIC HUB | universal launcher v0.2.23
 -- 3-second loading gate, key-only entry, and quiet accent-glow interface.
 -- Based on the user's v0.2.14 launcher; auth API and game module flow preserved.
 
@@ -19,7 +19,7 @@ end
 local BASE = "https://raw.githubusercontent.com/paporotnicsir/PaporotnicHub/refs/heads/main/"
 local CATALOG_URL = BASE .. "catalog.json"
 local FALLBACK = {
-    version = "0.2.22 (offline catalog)",
+    version = "0.2.23 (offline catalog)",
     latestVersion = "Paporotnic Hub Core v0.2.8",
     lifetimePrice = "$ ?? / TBA",
     announcement = "Welcome, LIL Paporotnics! The universal hub is online.",
@@ -34,6 +34,9 @@ local FALLBACK = {
             id = "release-020", version = "v0.2.0", name = "Launcher redesign",
             summary = "Larger interface, fern background and a dedicated Releases page.",
             updates = {
+                {version = "v0.2.23", title = "Game & Universal Script categories",
+                  body = "Scripts now separates game-specific modules and universal tools. Infinite Yield runs from the official EdgeIY repository after key verification.",
+                  bodyRu = "Скрипты разделены на игровые и универсальные. Infinite Yield запускается из официального EdgeIY только после проверки ключа."},
                 {version = "v0.2.22", title = "Recent temporary key prefill",
                   body = "The last verified temporary key is prefilled for manual activation. Remember Me remains opt-in for auto-login; Lifetime keys stay hidden by default.",
                   bodyRu = "Последний подтверждённый временный ключ подставляется для ручной активации. Автовход — только через Remember Me; Lifetime без него не сохраняется."},
@@ -120,7 +123,16 @@ end
 local strings = {
     ru = {
         searchHint="Поиск игры...", noSearchResults="Игры по запросу не найдены",
-        home="ГЛАВНАЯ", games="ИГРЫ", releases="РЕЛИЗЫ", settings="НАСТРОЙКИ", title="PAPOROTNIC HUB",
+        scriptsGame="ИГРОВЫЕ СКРИПТЫ", scriptsUniversal="УНИВЕРСАЛЬНЫЕ",
+        universalTitle="УНИВЕРСАЛЬНЫЕ СКРИПТЫ", universalSub="Инструменты, не привязанные к конкретному плейсу.",
+        infiniteDesc="Админ-команды и утилиты для Roblox. Совместимость зависит от игры и исполнителя.",
+        infiniteCredit="Авторы: EdgeIY и участники проекта • MIT • сторонний скрипт",
+        infiniteSource="Источник: github.com/EdgeIY/infiniteyield",
+        infiniteWarning="Запускается внешний код из официального репозитория. Выполняй только если доверяешь источнику.",
+        infiniteLaunch="EXECUTE IY", infiniteLoading="Загружаем Infinite Yield...",
+        infiniteLoaded="Infinite Yield запущен.", infiniteBusy="Уже выполняется запуск скрипта.",
+        infiniteMissing="Исполнитель не поддерживает loadstring / HttpGet.",
+        home="ГЛАВНАЯ", games="СКРИПТЫ", releases="РЕЛИЗЫ", settings="НАСТРОЙКИ", title="PAPOROTNIC HUB",
         switchKey="СМЕНИТЬ КЛЮЧ", switchReady="Введи другой ключ. Старый ключ остаётся действительным.",
         switchBusy="Дождись завершения проверки ключа.",
         rememberTitle="ЗАПОМНИТЬ МЕНЯ", rememberOn="ЗАПОМИНАНИЕ: ВКЛ", rememberOff="ЗАПОМИНАНИЕ: ВЫКЛ",
@@ -152,7 +164,7 @@ local strings = {
         releaseSub="Новости и изменения Paporotnic Hub", totalGames="Игр в каталоге", authState="Статус доступа",
         accessPublic="PUBLIC / TEST", accessGranted="Ключ активирован", accessNeed="Ожидает ключ",
         patches="ПОДОБНОВЛЕНИЙ", expandedHint="Нажми на релиз, чтобы увидеть изменения",
-        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.22 (TEST)",
+        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.23 (TEST)",
         themeHeading="ТЕМА ОФОРМЛЕНИЯ", themeHint="Изменения применяются сразу. Сохранение работает, если исполнитель поддерживает запись файлов.",
         themeForest="ЛЕСНАЯ", themeOcean="НОЧНОЙ ОКЕАН", themeEmber="ЗАКАТ", themeViolet="ФИОЛЕТОВАЯ", themeActive="ВЫБРАНО",
          gateSubtitle="Для доступа к хабу требуется ключ", gateIdle="Введите ключ для продолжения.",
@@ -160,7 +172,16 @@ local strings = {
     },
     en = {
         searchHint="Search games...", noSearchResults="No matching games",
-        home="HOME", games="GAMES", releases="RELEASES", settings="SETTINGS", title="PAPOROTNIC HUB",
+        scriptsGame="GAME SCRIPTS", scriptsUniversal="UNIVERSAL SCRIPTS",
+        universalTitle="UNIVERSAL SCRIPTS", universalSub="Tools that do not target a single Roblox place.",
+        infiniteDesc="Admin commands and Roblox utilities. Compatibility depends on the game and executor.",
+        infiniteCredit="By EdgeIY & contributors • MIT • third-party script",
+        infiniteSource="Source: github.com/EdgeIY/infiniteyield",
+        infiniteWarning="Runs external code directly from the official repository. Only execute if you trust the source.",
+        infiniteLaunch="EXECUTE IY", infiniteLoading="Loading Infinite Yield...",
+        infiniteLoaded="Infinite Yield started.", infiniteBusy="A script is already launching.",
+        infiniteMissing="Executor lacks loadstring / HttpGet support.",
+        home="HOME", games="SCRIPTS", releases="RELEASES", settings="SETTINGS", title="PAPOROTNIC HUB",
         switchKey="SWITCH KEY", switchReady="Enter another key. Your previous key stays valid.",
         switchBusy="Wait until verification finishes.",
         rememberTitle="REMEMBER ME", rememberOn="REMEMBER ME: ON", rememberOff="REMEMBER ME: OFF",
@@ -192,7 +213,7 @@ local strings = {
         releaseSub="News and changes for Paporotnic Hub", totalGames="Games in catalog", authState="Access status",
         accessPublic="PUBLIC / TEST", accessGranted="Key activated", accessNeed="Awaiting key",
         patches="PATCHES", expandedHint="Click a release to view its updates",
-        releaseBuild="LAUNCHER BUILD: v0.2.22 (TEST)",
+        releaseBuild="LAUNCHER BUILD: v0.2.23 (TEST)",
         themeHeading="COLOR THEME", themeHint="Themes apply instantly. Saving needs executor file access.",
         themeForest="FOREST", themeOcean="NIGHT OCEAN", themeEmber="SUNSET", themeViolet="VIOLET", themeActive="ACTIVE",
          gateSubtitle="An access key is required to continue", gateIdle="Enter your key to continue.",
@@ -341,6 +362,8 @@ local authenticated = false
 local approvedKeyKind = nil -- "temporary" or "lifetime", confirmed by the VPS response.
 local authMode = "server"  -- fail closed, even with an offline or stale catalog
 local selectedTab = "home"
+local scriptCategory = "games" -- Game Scripts / Universal Scripts
+local universalRunning = false
 local statusText = ""
 local uiPhase = "BOOT" -- BOOT / AUTH / UNLOCKING / MAIN
 local verifyingKey = false
@@ -475,6 +498,8 @@ end
 -- Decorative asset requests removed: startup and main background are clean.
 
 local approvedKey = nil
+-- Fixed, reviewed source; never accept arbitrary URLs from catalog.json here.
+local INFINITE_YIELD_SOURCE = "https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"
 
 -- Some Luau executors expose gethwid(). Standard Roblox Luau does not.
 -- Never invent a fingerprint: an unsupported executor must be reported to the user.
@@ -600,6 +625,67 @@ local function launch(row)
     end)
 end
 
+-- Universal tools may run in any Roblox place, unlike game-specific modules.
+-- Reuse the SAME server authorization check, including revoked keys and HWID.
+-- The only supported third-party source is the exact, hardcoded official URL.
+local function launchInfiniteYield()
+    if universalRunning or verifyingKey then info(T("infiniteBusy"),true); return end
+    if not authenticated or type(approvedKey)~="string" then info(T("unauth"),true); return end
+    local launchEpoch = sessionEpoch
+    universalRunning=true
+    -- The external script executes with the permissions of the user's executor.
+    -- Its source can change upstream. It is never launched automatically.
+    verifyKey(approvedKey,function()
+        if not alive or launchEpoch~=sessionEpoch or not authenticated then
+            universalRunning=false
+            return
+        end
+        info(T("infiniteLoading"))
+        task.spawn(function()
+            if type(loadstring)~="function" then
+                universalRunning=false
+                info(T("infiniteMissing"),true)
+                return
+            end
+            local fetched, code=pcall(function() return game:HttpGet(INFINITE_YIELD_SOURCE) end)
+            if not alive or launchEpoch~=sessionEpoch or not authenticated then
+                universalRunning=false
+                return
+            end
+            if not fetched or type(code)~="string" or #code==0 then
+                universalRunning=false
+                info(T("loadFail")..tostring(code),true)
+                return
+            end
+            local compiled, fn=pcall(function() return loadstring(code) end)
+            if not compiled or type(fn)~="function" then
+                universalRunning=false
+                info(T("loadFail")..tostring(fn),true)
+                return
+            end
+            if not alive or launchEpoch~=sessionEpoch or not authenticated then
+                universalRunning=false
+                return
+            end
+            local launched,err=pcall(fn)
+            universalRunning=false
+            if not alive or launchEpoch~=sessionEpoch then return end
+            if launched then
+                info(T("infiniteLoaded"))
+                screen.Enabled=false
+            else
+                info(T("loadFail")..tostring(err),true)
+            end
+        end)
+    end)
+    -- Network/denial path: verifyKey calls onRejected only for firm rejection.
+    -- A transient failure leaves universalRunning set, so guard with a bounded
+    -- task and session token; it never authorizes a script by itself.
+    task.delay(20,function()
+        if alive and launchEpoch==sessionEpoch then universalRunning=false end
+    end)
+end
+
 local function createMagnifier(parent, pos)
     local holder = create("Frame", {BackgroundTransparency=1, Size=UDim2.fromOffset(18,18), Position=pos}, parent)
     local ring = create("Frame", {
@@ -679,16 +765,15 @@ local function renderHome()
     if not catalogOk then txt(sc,T("offline"),11,palette.alert,22) end
 end
 
-local function renderGames()
-    clearPage()
-    local heading=txt(content,T("supported"),22,palette.text,38)
+local function renderGameScripts(panel)
+    local heading=txt(panel,T("supported"),22,palette.text,38)
     heading.Font=Enum.Font.GothamBold
     heading.Size=UDim2.new(1,-348,0,38)
 
     local searchWrap=create("Frame",{
         Position=UDim2.new(1,-330,0,1), Size=UDim2.fromOffset(330,38),
         BackgroundColor3=palette.card, BorderSizePixel=0
-    },content)
+    },panel)
     corner(searchWrap,9)
     create("UIStroke",{Thickness=1,Color=palette.border,Transparency=0.2},searchWrap)
     createMagnifier(searchWrap, UDim2.fromOffset(11,10))
@@ -706,7 +791,7 @@ local function renderGames()
         BackgroundTransparency=1,ScrollBarThickness=4,BorderSizePixel=0,
         AutomaticCanvasSize=Enum.AutomaticSize.Y,CanvasSize=UDim2.new(0,0,0,0),
         ScrollingDirection=Enum.ScrollingDirection.Y
-    },content)
+    },panel)
     stack(scroll,12)
     if not catalog.games or #catalog.games == 0 then txt(scroll,T("noGames"),14,palette.muted,28); return end
 
@@ -751,6 +836,72 @@ local function renderGames()
     end
     connect(searchBox:GetPropertyChangedSignal("Text"),applySearch)
     applySearch()
+end
+
+
+local function renderUniversalScripts(panel)
+    local heading=txt(panel,T("universalTitle"),22,palette.text,38)
+    heading.Font=Enum.Font.GothamBold
+    local subtitle=txt(panel,T("universalSub"),13,palette.muted,26)
+    subtitle.Position=UDim2.fromOffset(0,37)
+
+    local row=card(panel,204)
+    row.Position=UDim2.fromOffset(0,78)
+    local iconHolder=create("Frame",{
+        Position=UDim2.fromOffset(4,13), Size=UDim2.fromOffset(86,86),
+        BackgroundColor3=palette.card,BorderSizePixel=0
+    },row)
+    corner(iconHolder,14)
+    local iconText=txt(iconHolder,"IY",29,palette.highlight,56,Enum.TextXAlignment.Center)
+    iconText.Font=Enum.Font.GothamBold
+    iconText.Position=UDim2.fromOffset(0,15)
+    local title=txt(row,"Infinite Yield",21,palette.text,30)
+    title.Font=Enum.Font.GothamBold
+    title.Position=UDim2.fromOffset(106,3)
+    title.Size=UDim2.new(1,-112,0,30)
+    local desc=txt(row,T("infiniteDesc"),13,palette.muted,42)
+    desc.Position=UDim2.fromOffset(106,39)
+    desc.Size=UDim2.new(1,-112,0,42)
+    local credit=txt(row,T("infiniteCredit"),12,palette.highlight,22)
+    credit.Position=UDim2.fromOffset(106,84)
+    credit.Size=UDim2.new(1,-112,0,22)
+    local source=txt(row,T("infiniteSource"),12,palette.muted,22)
+    source.Position=UDim2.fromOffset(4,113)
+    source.Size=UDim2.new(1,-10,0,22)
+    local run=button(row,T("infiniteLaunch"),144,38,launchInfiniteYield,true)
+    run.Name="InfiniteYieldExecute"
+    run.Position=UDim2.new(1,-148,1,-40)
+    local foot=txt(row,T("infiniteWarning"),11,palette.alert,38)
+    foot.Position=UDim2.fromOffset(4,149)
+    foot.Size=UDim2.new(1,-166,0,38)
+end
+
+local function renderGames()
+    clearPage()
+    local categoryBar=create("Frame",{
+        Size=UDim2.new(1,0,0,44), BackgroundTransparency=1,
+    },content)
+    local gameTab=button(categoryBar,T("scriptsGame"),220,40,function()
+        scriptCategory="games"
+        renderGames()
+    end,scriptCategory=="games")
+    gameTab.Name="GameScriptsTab"
+    gameTab.Position=UDim2.fromOffset(0,0)
+    local universalTab=button(categoryBar,T("scriptsUniversal"),220,40,function()
+        scriptCategory="universal"
+        renderGames()
+    end,scriptCategory=="universal")
+    universalTab.Name="UniversalScriptsTab"
+    universalTab.Position=UDim2.fromOffset(232,0)
+    local panel=create("Frame",{
+        Position=UDim2.fromOffset(0,58),
+        Size=UDim2.new(1,0,1,-58), BackgroundTransparency=1
+    },content)
+    if scriptCategory=="universal" then
+        renderUniversalScripts(panel)
+    else
+        renderGameScripts(panel)
+    end
 end
 
 local function renderReleases()
@@ -1492,4 +1643,4 @@ local function playLaunchIntro()
 end
 
 task.spawn(playLaunchIntro)
-print("[Paporotnic Universal Launcher] v0.2.22 | PlaceId="..tostring(game.PlaceId))
+print("[Paporotnic Universal Launcher] v0.2.23 | PlaceId="..tostring(game.PlaceId))
