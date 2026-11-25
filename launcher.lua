@@ -1,4 +1,4 @@
--- PAPOROTNIC HUB | universal launcher v0.2.36
+-- PAPOROTNIC HUB | universal launcher v0.2.37
 -- 3-second loading gate, key-only entry, and quiet accent-glow interface.
 -- Based on the user's v0.2.14 launcher; auth API and game module flow preserved.
 
@@ -31,7 +31,7 @@ local PREMIUM_ASSETS = {
     wallpaper = "",          -- subtle atmospheric backdrop
 }
 local LAYERED_FILES = {
-    heroBanner = "featured-banner.png",
+    heroBanner = "featured-banner-v037.png",
     infiniteYield = "infinite-yield.png",
     infiniteYieldCard = "infinite-yield-card.png",
     fernLogo = "fern-logo.png",
@@ -60,7 +60,7 @@ local function gameIconContent(item)
 end
 
 local FALLBACK = {
-    version = "0.2.36 (offline catalog)",
+    version = "0.2.37 (offline catalog)",
     latestVersion = "Paporotnic Hub Core v0.2.8",
     lifetimePrice = "$ ?? / TBA",
     announcement = "Welcome, LIL Paporotnics! The universal hub is online.",
@@ -75,6 +75,9 @@ local FALLBACK = {
             id = "release-020", version = "v0.2.0", name = "Launcher redesign",
             summary = "Larger interface, fern background and a dedicated Releases page.",
             updates = {
+                {version = "v0.2.37", title = "Signature Artwork & Cache Fix",
+                  body = "New signature banner with a versioned artwork filename.",
+                  bodyRu = "Фирменный баннер и новое имя файла для обновления кэша."},
                 {version = "v0.2.36", title = "Avatar backplate isolation hotfix",
                   body = "WHITE and THEME now affect only the avatar background; regular controls keep their theme colors.",
                   bodyRu = "WHITE/THEME меняют только фон аватарки, без побеления кнопок и HEX-полей."},
@@ -262,7 +265,7 @@ local strings = {
         releaseSub="Новости и изменения Paporotnic Hub", totalGames="Игр в каталоге", authState="Статус доступа",
         accessPublic="PUBLIC / TEST", accessGranted="Ключ активирован", accessNeed="Ожидает ключ",
         patches="ПОДОБНОВЛЕНИЙ", expandedHint="Нажми на релиз, чтобы увидеть изменения",
-        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.36",
+        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.37",
         themeHeading="ТЕМА ОФОРМЛЕНИЯ", themeHint="Изменения применяются сразу. Сохранение работает, если исполнитель поддерживает запись файлов.",
         themeForest="ЛЕСНАЯ", themeOcean="НОЧНОЙ ОКЕАН", themeEmber="ЗАКАТ", themeViolet="ФИОЛЕТОВАЯ", themeActive="ВЫБРАНО",
          gateSubtitle="Для доступа к хабу требуется ключ", gateIdle="Введите ключ для продолжения.",
@@ -329,7 +332,7 @@ local strings = {
         releaseSub="News and changes for Paporotnic Hub", totalGames="Games in catalog", authState="Access status",
         accessPublic="PUBLIC / TEST", accessGranted="Key activated", accessNeed="Awaiting key",
         patches="PATCHES", expandedHint="Click a release to view its updates",
-        releaseBuild="LAUNCHER BUILD: v0.2.36",
+        releaseBuild="LAUNCHER BUILD: v0.2.37",
         themeHeading="COLOR THEME", themeHint="Themes apply instantly. Saving needs executor file access.",
         themeForest="FOREST", themeOcean="NIGHT OCEAN", themeEmber="SUNSET", themeViolet="VIOLET", themeActive="ACTIVE",
          gateSubtitle="An access key is required to continue", gateIdle="Enter your key to continue.",
@@ -2248,7 +2251,7 @@ local function headerChip(textValue,x,w)
 end
 local stateChip,stateText=headerChip("●  ACCESS VERIFIED",326,170)
 local apiChip,apiText=headerChip("KEY SYSTEM",510,139)
-local buildChip,buildText=headerChip("HUB  v0.2.36",663,150)
+local buildChip,buildText=headerChip("HUB  v0.2.37",663,150)
 
 local profile=create("Frame",{Position=UDim2.new(1,-333,0,9),Size=UDim2.fromOffset(189,58),
     BackgroundColor3=palette.headerActions,BorderSizePixel=0},top)
@@ -2450,10 +2453,10 @@ renderRightRail=function()
     local updates=rrPanel(485,150)
     rrLabel(updates,L("Обновления","Latest Updates"),15,palette.text,13,8,250,28,true)
     local recent={
+        {"v0.2.37",L("Фирменный баннер","Signature Artwork")},
         {"v0.2.36",L("Исправление фона аватарки","Avatar Backplate Fix")},
         {"v0.2.35",L("Разделители и аватарка","Dividers & Avatar")},
         {"v0.2.34",L("Цвета кнопок и линий","Chrome Colors")},
-        {"v0.2.33",L("Прозрачность боковины","Sidebar Opacity")},
     }
     for i,r in ipairs(recent) do
         local y=40+(i-1)*26
