@@ -1,4 +1,4 @@
--- PAPOROTNIC HUB | universal launcher v0.2.25
+-- PAPOROTNIC HUB | universal launcher v0.2.26
 -- 3-second loading gate, key-only entry, and quiet accent-glow interface.
 -- Based on the user's v0.2.14 launcher; auth API and game module flow preserved.
 
@@ -18,8 +18,9 @@ end
 
 local BASE = "https://raw.githubusercontent.com/paporotnicsir/PaporotnicHub/refs/heads/main/"
 local CATALOG_URL = BASE .. "catalog.json"
--- Optional original artwork. Upload the bundled PNG files as Roblox Images
--- and paste their public asset IDs here. All controls work without these.
+-- Optional artwork. Leave blank for the fully styled built-in banner and card;
+-- no upload is required to avoid empty image regions. Custom uploaded
+-- Roblox Images are only a visual overlay, not a dependency.
 local PREMIUM_ASSETS = {
     heroBanner = "",  -- e.g. "rbxassetid://123456789"; optional
     infiniteYield = "",  -- optional illustration for the IY card
@@ -29,7 +30,7 @@ local function premiumImageId(value)
 end
 
 local FALLBACK = {
-    version = "0.2.25 (offline catalog)",
+    version = "0.2.26 (offline catalog)",
     latestVersion = "Paporotnic Hub Core v0.2.8",
     lifetimePrice = "$ ?? / TBA",
     announcement = "Welcome, LIL Paporotnics! The universal hub is online.",
@@ -44,6 +45,9 @@ local FALLBACK = {
             id = "release-020", version = "v0.2.0", name = "Launcher redesign",
             summary = "Larger interface, fern background and a dedicated Releases page.",
             updates = {
+                {version = "v0.2.26", title = "Clean Dashboard Rework",
+                  body = "Replaced the faux fern icon with a clean monogram, redesigned empty image areas as built-in premium graphics, reduced border clutter and improved layout readability.",
+                  bodyRu = "Вместо неудачного значка — чистая монограмма; вместо пустых картинок — оформленные встроенные баннеры, меньше лишних рамок и лучше читаемость."},
                 {version = "v0.2.25", title = "Premium Dashboard · visual fidelity",
                   body = "Screenshot-inspired dashboard with a wide featured banner, lime navigation, game tiles, universal tools, access and update rails, plus responsive scaling.",
                   bodyRu = "Главная максимально приближена к макету: большой баннер, зелёное меню, карточки игр, универсальные инструменты, доступ и обновления; адаптивный масштаб."},
@@ -198,7 +202,7 @@ local strings = {
         releaseSub="Новости и изменения Paporotnic Hub", totalGames="Игр в каталоге", authState="Статус доступа",
         accessPublic="PUBLIC / TEST", accessGranted="Ключ активирован", accessNeed="Ожидает ключ",
         patches="ПОДОБНОВЛЕНИЙ", expandedHint="Нажми на релиз, чтобы увидеть изменения",
-        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.25 (TEST)",
+        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.26",
         themeHeading="ТЕМА ОФОРМЛЕНИЯ", themeHint="Изменения применяются сразу. Сохранение работает, если исполнитель поддерживает запись файлов.",
         themeForest="ЛЕСНАЯ", themeOcean="НОЧНОЙ ОКЕАН", themeEmber="ЗАКАТ", themeViolet="ФИОЛЕТОВАЯ", themeActive="ВЫБРАНО",
          gateSubtitle="Для доступа к хабу требуется ключ", gateIdle="Введите ключ для продолжения.",
@@ -265,7 +269,7 @@ local strings = {
         releaseSub="News and changes for Paporotnic Hub", totalGames="Games in catalog", authState="Access status",
         accessPublic="PUBLIC / TEST", accessGranted="Key activated", accessNeed="Awaiting key",
         patches="PATCHES", expandedHint="Click a release to view its updates",
-        releaseBuild="LAUNCHER BUILD: v0.2.25 (TEST)",
+        releaseBuild="LAUNCHER BUILD: v0.2.26",
         themeHeading="COLOR THEME", themeHint="Themes apply instantly. Saving needs executor file access.",
         themeForest="FOREST", themeOcean="NIGHT OCEAN", themeEmber="SUNSET", themeViolet="VIOLET", themeActive="ACTIVE",
          gateSubtitle="An access key is required to continue", gateIdle="Enter your key to continue.",
@@ -787,45 +791,88 @@ function render() end
 
 local function renderHome()
     clearPage()
-    local function L(ru,en) return (lang=="ru") and ru or en end
-    local function label(parent, value, size, color, x, y, w, h, weight)
-        local o=txt(parent,value,size,color or palette.text,h)
-        o.Position=UDim2.fromOffset(x,y)
-        o.Size=UDim2.new(0,w,0,h)
-        o.TextWrapped=true
-        if weight then o.Font=Enum.Font.GothamBold end
-        return o
-    end
-    local function frame(parent,x,y,w,h,color,radius,border)
-        local f=create("Frame",{Position=UDim2.fromOffset(x,y),Size=UDim2.fromOffset(w,h),
-            BackgroundColor3=color or palette.panel,BorderSizePixel=0,ClipsDescendants=true},parent)
+    local function L(ru,en) return lang=="ru" and ru or en end
+
+    -- v0.2.26: no artwork is required for the dashboard to look complete.
+    -- ImageLabels overlay an actual styled surface, so missing or restricted
+    -- Roblox thumbnails never produce empty black hero/tiles.
+    local function block(parent, pos, size, color, radius)
+        local f=create("Frame",{
+            Position=pos or UDim2.fromOffset(0,0),Size=size or UDim2.fromOffset(100,100),
+            BackgroundColor3=color or palette.panel,BorderSizePixel=0,ClipsDescendants=true
+        },parent)
         corner(f,radius or 12)
-        if border then create("UIStroke",{Color=palette.border,Thickness=1,Transparency=0.2},f) end
         return f
     end
-    local function action(parent,value,x,y,w,h,cb,accent)
-        local b=button(parent,value,w,h,cb,accent)
+    local function line(parent,x,y,w,h,color,alpha)
+        return create("Frame",{
+            Position=UDim2.fromOffset(x,y),Size=UDim2.fromOffset(w,h),
+            BackgroundColor3=color or palette.border,BackgroundTransparency=alpha or 0,
+            BorderSizePixel=0
+        },parent)
+    end
+    local function textAt(parent,value,size,color,x,y,w,h,bold)
+        local obj=txt(parent,value,size,color or palette.text,h)
+        obj.Position=UDim2.fromOffset(x,y)
+        obj.Size=UDim2.fromOffset(w,h)
+        obj.TextWrapped=true
+        obj.TextTruncate=Enum.TextTruncate.AtEnd
+        if bold then obj.Font=Enum.Font.GothamBold end
+        return obj
+    end
+    local function thinBorder(parent,color,alpha)
+        create("UIStroke",{Color=color or palette.border,Thickness=1,Transparency=alpha or 0.65},parent)
+    end
+    local function imageOverlay(parent,url)
+        if type(url)~="string" or url=="" then return nil end
+        -- BackgroundTransparency=1: fallback underneath remains visible
+        -- while Roblox downloads the image or when asset access is denied.
+        local img=create("ImageLabel",{
+            Name="OptionalArtwork",Size=UDim2.fromScale(1,1),
+            BackgroundTransparency=1,BorderSizePixel=0,
+            Image=url,ScaleType=Enum.ScaleType.Crop,
+            ImageTransparency=0.16
+        },parent)
+        return img
+    end
+    local function section(parent,ru,en,target,category)
+        local bar=block(parent,nil,UDim2.new(1,-4,0,31),palette.background,0)
+        bar.BackgroundTransparency=1
+        local dot=block(bar,UDim2.fromOffset(1,9),UDim2.fromOffset(10,10),palette.highlight,4)
+        local heading=textAt(bar,L(ru,en),16,palette.text,20,1,450,29,true)
+        local all=button(bar,L("СМОТРЕТЬ ВСЕ  >","SEE ALL  >"),118,28,function()
+            navigateTo(target,category)
+        end,false)
+        all.Size=UDim2.fromOffset(118,26)
+        all.Position=UDim2.new(1,-122,0,1)
+        all.TextSize=11
+        all.BackgroundTransparency=0.45
+        corner(all,8)
+        return bar
+    end
+    local function callToAction(parent,caption,x,y,w,onClick,accent)
+        local b=button(parent,caption,w,39,onClick,accent)
         b.Position=UDim2.fromOffset(x,y)
-        b.TextSize=12
+        b.TextSize=13
         corner(b,10)
-        create("UIStroke",{Thickness=1,Color=accent and palette.highlight or palette.border,Transparency=accent and 0.48 or 0.1},b)
         connect(b.MouseEnter,function()
-            if not b.Parent then return end
-            TweenService:Create(b,TweenInfo.new(0.13),{BackgroundTransparency=0.12}):Play()
+            if b.Parent then TweenService:Create(b,TweenInfo.new(0.13),{BackgroundTransparency=0.14}):Play() end
         end)
         connect(b.MouseLeave,function()
-            if not b.Parent then return end
-            TweenService:Create(b,TweenInfo.new(0.16),{BackgroundTransparency=0}):Play()
+            if b.Parent then TweenService:Create(b,TweenInfo.new(0.16),{BackgroundTransparency=0}):Play() end
         end)
         return b
     end
-    local sc=create("ScrollingFrame",{
+
+    local scroll=create("ScrollingFrame",{
         Name="PremiumHomeScroll",Size=UDim2.new(1,0,1,0),
-        BackgroundTransparency=1,BorderSizePixel=0,ScrollBarThickness=3,
-        ScrollBarImageColor3=palette.highlight,ScrollingDirection=Enum.ScrollingDirection.Y,
-        AutomaticCanvasSize=Enum.AutomaticSize.Y,CanvasSize=UDim2.new(0,0,0,0)
+        BackgroundTransparency=1,BorderSizePixel=0,
+        ScrollBarThickness=3,ScrollBarImageColor3=palette.highlight,
+        ScrollingDirection=Enum.ScrollingDirection.Y,
+        AutomaticCanvasSize=Enum.AutomaticSize.Y,
+        CanvasSize=UDim2.fromOffset(0,0)
     },content)
-    create("UIListLayout",{Padding=UDim.new(0,13),SortOrder=Enum.SortOrder.LayoutOrder},sc)
+    create("UIListLayout",{Padding=UDim.new(0,13),SortOrder=Enum.SortOrder.LayoutOrder},scroll)
 
     local games={}
     local featured
@@ -836,193 +883,172 @@ local function renderHome()
         end
     end
     if not featured then featured=games[1] end
-    local realGameCount=#games
 
-    -- HERO: screenshot-inspired enormous wide cover; REAL catalog game only.
-    local hero=frame(sc,0,0,750,220,palette.panel,15,true)
-    hero.Size=UDim2.new(1,-4,0,220)
+    -- Featured: illustrated-in-UI right third, dark readable left side.
+    local hero=block(scroll,nil,UDim2.new(1,-4,0,234),palette.panel,15)
+    hero.Name="FeaturedModule"
+    thinBorder(hero,palette.border,0.42)
     create("UIGradient",{Rotation=0,Color=ColorSequence.new({
-        ColorSequenceKeypoint.new(0,Color3.fromRGB(12,26,18)),
-        ColorSequenceKeypoint.new(0.5,Color3.fromRGB(22,17,31)),
-        ColorSequenceKeypoint.new(1,Color3.fromRGB(36,23,37))
+        ColorSequenceKeypoint.new(0,Color3.fromRGB(9,22,18)),
+        ColorSequenceKeypoint.new(0.58,Color3.fromRGB(17,21,35)),
+        ColorSequenceKeypoint.new(1,Color3.fromRGB(35,25,47))
     })},hero)
-    local heroGlow=frame(hero,0,0,380,220,palette.highlight,0,false)
-    heroGlow.BackgroundTransparency=0.94
-    create("UIGradient",{Rotation=0,Transparency=NumberSequence.new({
-        NumberSequenceKeypoint.new(0,0.85),NumberSequenceKeypoint.new(1,1)
-    })},heroGlow)
-    local art=""
-    if premiumImageId(PREMIUM_ASSETS.heroBanner) then art=PREMIUM_ASSETS.heroBanner
+    local artPanel=block(hero,UDim2.new(0.57,0,0,0),UDim2.new(0.43,0,1,0),Color3.fromRGB(30,37,54),0)
+    create("UIGradient",{Rotation=35,Color=ColorSequence.new({
+        ColorSequenceKeypoint.new(0,Color3.fromRGB(19,47,43)),
+        ColorSequenceKeypoint.new(0.45,Color3.fromRGB(28,24,49)),
+        ColorSequenceKeypoint.new(1,Color3.fromRGB(88,48,65))
+    })},artPanel)
+    -- Fallback graphic: an angled futuristic module frame, not blank space.
+    for i=1,7 do
+        line(artPanel,-20+(i*52),-16,2,280,palette.highlight,0.84)
+    end
+    local halo=block(artPanel,UDim2.new(.53,-88,.48,-88),UDim2.fromOffset(176,176),palette.background,88)
+    halo.BackgroundTransparency=0.67
+    create("UIStroke",{Color=palette.highlight,Thickness=3,Transparency=0.60},halo)
+    local innerRing=block(artPanel,UDim2.new(.53,-55,.48,-55),UDim2.fromOffset(110,110),palette.panel,55)
+    innerRing.BackgroundTransparency=0.22
+    create("UIStroke",{Color=palette.highlight,Thickness=1.5,Transparency=0.35},innerRing)
+    local emblem=textAt(innerRing,"P",58,palette.highlight,0,17,110,75,true)
+    emblem.TextXAlignment=Enum.TextXAlignment.Center
+    textAt(artPanel,"MODULE  /  01",10,palette.text,16,15,205,21,true).TextTransparency=0.22
+    textAt(artPanel,"PAPOROTNIC",11,palette.text,18,205,230,18,true).TextTransparency=0.48
+    local currentImage=""
+    if premiumImageId(PREMIUM_ASSETS.heroBanner) then
+        currentImage=PREMIUM_ASSETS.heroBanner
     elseif featured and tonumber(featured.universeId) then
-        art="rbxthumb://type=GameIcon&id="..tostring(featured.universeId).."&w=420&h=420"
+        currentImage="rbxthumb://type=GameIcon&id="..tostring(featured.universeId).."&w=420&h=420"
     end
-    if art~="" then
-        local hasPremiumBanner=premiumImageId(PREMIUM_ASSETS.heroBanner)~=nil
-        local bg=create("ImageLabel",{Name="HeroArt",
-            Position=hasPremiumBanner and UDim2.fromOffset(0,0) or UDim2.new(0.46,0,0,-1),
-            Size=hasPremiumBanner and UDim2.new(1,0,1,0) or UDim2.new(0.54,0,1,2),
-            Image=art,ScaleType=Enum.ScaleType.Crop,
-            ImageTransparency=hasPremiumBanner and 0.03 or 0.11,
-            BackgroundTransparency=1,BorderSizePixel=0},hero)
-        create("UIGradient",{Rotation=0,Transparency=hasPremiumBanner and NumberSequence.new({
-            NumberSequenceKeypoint.new(0,0.18),
-            NumberSequenceKeypoint.new(0.4,0.03),
-            NumberSequenceKeypoint.new(1,0)
-        }) or NumberSequence.new({
-            NumberSequenceKeypoint.new(0,1),
-            NumberSequenceKeypoint.new(0.33,0.45),
-            NumberSequenceKeypoint.new(1,0.03)
-        })},bg)
-    end
-    frame(hero,0,0,750,3,palette.highlight,0,false).BackgroundTransparency=0.13
-    local pill=frame(hero,23,22,159,24,palette.highlight,9,false)
-    pill.BackgroundTransparency=0.73
-    label(pill,L("✦  ВЫБРАННЫЙ МОДУЛЬ","✦  FEATURED MODULE"),10,palette.highlight,9,0,149,24,true)
-    local heroName=featured and tostring(featured.title or "Game") or T("dashboardWelcome")
-    local title=label(hero,heroName,29,palette.text,22,56,440,69,true)
-    title.TextYAlignment=Enum.TextYAlignment.Top
-    title.TextTruncate=Enum.TextTruncate.AtEnd
-    label(hero,featured and tostring(featured.description or "") or T("dashboardNoModule"),
-        12,palette.muted,23,132,450,32)
-    action(hero,featured and L("▶  ЗАПУСТИТЬ","▶  LAUNCH") or T("dashboardBrowse"),
-        23,180,164,39,function()
+    local optionalArt=imageOverlay(artPanel,currentImage)
+    if optionalArt then optionalArt.ImageTransparency=0.16 end
+    -- Dark left mask keeps copy legible even with a bright user-supplied art.
+    local textBackdrop=block(hero,UDim2.fromOffset(0,0),UDim2.new(.67,0,1,0),palette.background,0)
+    textBackdrop.BackgroundTransparency=0.08
+    create("UIGradient",{Rotation=0,Transparency=NumberSequence.new({
+        NumberSequenceKeypoint.new(0,0.05),
+        NumberSequenceKeypoint.new(0.70,0.28),
+        NumberSequenceKeypoint.new(1,1)
+    })},textBackdrop)
+    local pill=block(hero,UDim2.fromOffset(22,18),UDim2.fromOffset(166,27),palette.highlight,9)
+    pill.BackgroundTransparency=0.81
+    textAt(pill,L("●  ВЫБРАННЫЙ МОДУЛЬ","●  FEATURED MODULE"),10,palette.highlight,10,1,148,25,true)
+    local heroTitle=featured and tostring(featured.title or "Game") or T("dashboardWelcome")
+    local hTitle=textAt(hero,heroTitle,30,palette.text,22,57,455,71,true)
+    hTitle.TextYAlignment=Enum.TextYAlignment.Top
+    local desc=textAt(hero,featured and tostring(featured.description or "") or T("dashboardNoModule"),
+        13,palette.muted,24,133,445,37,false)
+    desc.TextYAlignment=Enum.TextYAlignment.Top
+    callToAction(hero,featured and L("▶  ЗАПУСТИТЬ","▶  LAUNCH") or T("dashboardBrowse"),
+        23,184,163,function()
             if featured then launch(featured) else navigateTo("games","games") end
         end,true)
-    action(hero,L("◉  ПОДРОБНЕЕ","◉  DETAILS"),200,180,135,39,function()
+    callToAction(hero,L("ПОДРОБНЕЕ","DETAILS"),199,184,123,function()
         navigateTo("games","games")
     end,false)
-    local heroInfo=frame(hero,588,182,142,32,palette.background,8,true)
-    heroInfo.BackgroundTransparency=0.18
-    label(heroInfo,featured and tostring(featured.version or "CATALOG") or "LIBRARY",11,palette.text,9,2,125,13,true)
-    label(heroInfo,featured and (isSupported(featured) and L("● ТЕКУЩИЙ ПЛЕЙС","● CURRENT PLACE") or L("● ИЗ КАТАЛОГА","● CATALOG MODULE")) or "● —",
-        9,palette.highlight,9,16,130,13,true)
-    -- screenshot's carousel indicator is decorative until multiple real modules exist.
-    for i=1,3 do
-        frame(hero,333+(i-1)*40,213,i==1 and 28 or 22,3,i==1 and palette.highlight or palette.border,4,false)
-    end
+    local version=block(hero,UDim2.new(1,-139,1,-47),UDim2.fromOffset(121,31),palette.background,9)
+    version.BackgroundTransparency=0.12
+    thinBorder(version,palette.border,.5)
+    textAt(version,featured and tostring(featured.version or "CATALOG") or "LIBRARY",
+        11,palette.text,9,1,102,15,true)
+    textAt(version,featured and (isSupported(featured) and L("● ТЕКУЩИЙ ПЛЕЙС","● CURRENT PLACE")
+        or L("● В КАТАЛОГЕ","● CATALOG")) or "—",9,palette.highlight,9,16,107,14,true)
 
-    local libraryBar=create("Frame",{Size=UDim2.new(1,-4,0,30),BackgroundTransparency=1},sc)
-    label(libraryBar,L("◷  ИГРОВАЯ БИБЛИОТЕКА","◷  GAME LIBRARY"),16,palette.text,0,0,470,28,true)
-    local librarySee=action(libraryBar,L("ВСЕ ИГРЫ  ›","SEE ALL  ›"),630,0,116,25,function()
-        navigateTo("games","games")
-    end,false)
-    librarySee.Size=UDim2.new(0,112,0,25)
-    librarySee.Position=UDim2.new(1,-118,0,0)
-    librarySee.BackgroundTransparency=0.72
-
-    local gameRow=create("Frame",{Size=UDim2.new(1,-4,0,145),BackgroundTransparency=1},sc)
-    local tilesPerRow=4
-    for i=1,tilesPerRow do
-        local xScale=(i-1)/tilesPerRow
-        local tile=create("Frame",{
-            Position=UDim2.new(xScale, i==1 and 0 or 7,0,0),
-            Size=UDim2.new(1/tilesPerRow,-(i==1 and 5 or 12),1,0),
-            BorderSizePixel=0,BackgroundColor3=palette.panel,ClipsDescendants=true
-        },gameRow)
-        corner(tile,11)
-        create("UIStroke",{Color=(i==1 and palette.highlight or palette.border),Thickness=i==1 and 1.8 or 1,Transparency=i==1 and 0.20 or 0.26},tile)
-        if i<=realGameCount then
-            local item=games[i]
-            local image=""
-            if type(item.universeId)=="number" then
-                image="rbxthumb://type=GameIcon&id="..tostring(item.universeId).."&w=420&h=420"
-            end
-            local thumbnail=create("ImageLabel",{Position=UDim2.fromOffset(0,0),
-                Size=UDim2.new(1,0,0,98),BackgroundColor3=palette.card,BorderSizePixel=0,
-                ScaleType=Enum.ScaleType.Crop,Image=image},tile)
-            create("UIGradient",{Rotation=90,Transparency=NumberSequence.new({
-                NumberSequenceKeypoint.new(0,0),NumberSequenceKeypoint.new(1,0.55)
-            })},thumbnail)
-            local name=label(tile,tostring(item.title or "Module"),12,palette.text,9,102,153,28,true)
-            name.Size=UDim2.new(1,-18,0,29)
-            name.TextTruncate=Enum.TextTruncate.AtEnd
-            label(tile,(item.id==lastLaunchedGameId and L("● НЕДАВНО","● RECENTLY LAUNCHED") or
-                (isSupported(item) and L("● ТЕКУЩАЯ ИГРА","● CURRENT GAME") or L("● ДОСТУПНА","● IN CATALOG"))),
-                9,palette.highlight,9,126,160,15,true).Size=UDim2.new(1,-15,0,15)
-            local tap=create("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.new(1,0,1,0)},tile)
-            connect(tap.MouseButton1Click,function() navigateTo("games","games") end)
-            connect(tap.MouseEnter,function()
-                if tile.Parent then TweenService:Create(tile,TweenInfo.new(0.15),{BackgroundColor3=palette.card}):Play() end
-            end)
-            connect(tap.MouseLeave,function()
-                if tile.Parent then TweenService:Create(tile,TweenInfo.new(0.18),{BackgroundColor3=palette.panel}):Play() end
-            end)
-        else
-            local shortcut=i-realGameCount
-            local quick={
-                {glyph="◇",title=L("Universal Tools","Universal Tools"),sub=L("Открыть инструменты","Browse utilities"),page="games",category="universal"},
-                {glyph="▣",title=L("Обновления","Latest Updates"),sub=L("История версий","Release notes"),page="releases"},
-                {glyph="⚙",title=L("Темы и настройки","Themes & Settings"),sub=L("Персонализация","Personalize"),page="settings"},
-                {glyph="＋",title=L("Больше игр","More Games"),sub=L("Каталог пополняется","Catalog grows"),page="games",category="games"}
-            }
-            local q=quick[((shortcut-1)%#quick)+1]
-            local hdr=frame(tile,0,0,200,98,palette.card,0,false)
-            hdr.Size=UDim2.new(1,0,0,98)
-            create("UIGradient",{Rotation=32,Color=ColorSequence.new(palette.card,palette.panel)},hdr)
-            local glyph=label(hdr,q.glyph,34,palette.highlight,0,25,156,50,true)
-            glyph.Size=UDim2.new(1,0,0,50)
-            glyph.TextXAlignment=Enum.TextXAlignment.Center
-            label(tile,q.title,12,palette.text,9,106,170,22,true).Size=UDim2.new(1,-18,0,22)
-            label(tile,q.sub,9,palette.muted,9,130,170,17,false).Size=UDim2.new(1,-18,0,17)
-            local tap=create("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.new(1,0,1,0)},tile)
-            connect(tap.MouseButton1Click,function() navigateTo(q.page,q.category) end)
-        end
-    end
-
-    local toolsBar=create("Frame",{Size=UDim2.new(1,-4,0,30),BackgroundTransparency=1},sc)
-    label(toolsBar,L("◇  УНИВЕРСАЛЬНЫЕ СКРИПТЫ","◇  UNIVERSAL SCRIPTS"),16,palette.text,0,0,480,28,true)
-    local toolSee=action(toolsBar,L("ВСЕ СКРИПТЫ  ›","SEE ALL  ›"),630,0,116,25,function()
-        navigateTo("games","universal")
-    end,false)
-    toolSee.Size=UDim2.new(0,112,0,25)
-    toolSee.Position=UDim2.new(1,-118,0,0)
-    toolSee.BackgroundTransparency=0.72
-
-    local toolRow=create("Frame",{Size=UDim2.new(1,-4,0,154),BackgroundTransparency=1},sc)
+    section(scroll,"БИБЛИОТЕКА ИГР","GAME LIBRARY","games","games")
+    local gallery=block(scroll,nil,UDim2.new(1,-4,0,153),palette.background,0)
+    gallery.BackgroundTransparency=1
+    local quickLinks={
+        {name=L("ИНСТРУМЕНТЫ","Universal Tools"),sub=L("Все скрипты","Browse scripts"),initial="U",tab="games",category="universal"},
+        {name=L("ИСТОРИЯ ВЕРСИЙ","Latest Updates"),sub=L("Что нового","Patch notes"),initial="N",tab="releases"},
+        {name=L("НАСТРОЙКИ","Themes & Settings"),sub=L("Персонализация","Customize"),initial="S",tab="settings"},
+        {name=L("ВСЕ ИГРЫ","More Games"),sub=L("Открыть каталог","Explore catalog"),initial="G",tab="games",category="games"},
+    }
     for i=1,4 do
-        local tile=create("Frame",{
-            Position=UDim2.new((i-1)/4,i==1 and 0 or 7,0,0),
-            Size=UDim2.new(0.25,-(i==1 and 5 or 12),1,-2),
-            BorderSizePixel=0,BackgroundColor3=palette.panel,ClipsDescendants=true
-        },toolRow)
-        corner(tile,12)
-        create("UIStroke",{Color=i==1 and palette.highlight or palette.border,
-            Thickness=i==1 and 1.8 or 1,Transparency=i==1 and 0.18 or 0.24},tile)
-        if i==1 then
-            local banner=frame(tile,0,0,180,80,Color3.fromRGB(51,24,79),0,false)
-            banner.Size=UDim2.new(1,0,0,80)
-            create("UIGradient",{Rotation=25,Color=ColorSequence.new({
-                ColorSequenceKeypoint.new(0,Color3.fromRGB(25,18,46)),
-                ColorSequenceKeypoint.new(1,Color3.fromRGB(108,36,157))
-            })},banner)
-            if premiumImageId(PREMIUM_ASSETS.infiniteYield) then
-                create("ImageLabel",{Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,
-                    BorderSizePixel=0,Image=PREMIUM_ASSETS.infiniteYield,ScaleType=Enum.ScaleType.Crop},banner)
-            else
-                local iy=label(banner,"IY",36,Color3.fromRGB(214,163,255),0,14,170,55,true)
-                iy.Size=UDim2.new(1,0,0,55)
-                iy.TextXAlignment=Enum.TextXAlignment.Center
+        local tile=block(gallery,UDim2.new((i-1)/4,(i-1)*3,0,0),
+            UDim2.new(.25,-10,1,-2),palette.panel,12)
+        thinBorder(tile,i==1 and palette.highlight or palette.border,i==1 and 0.54 or 0.72)
+        local cover=block(tile,UDim2.fromOffset(0,0),UDim2.new(1,0,0,98),palette.card,0)
+        create("UIGradient",{Rotation=35,Color=ColorSequence.new({
+            ColorSequenceKeypoint.new(0,palette.card),
+            ColorSequenceKeypoint.new(.55,palette.panel),
+            ColorSequenceKeypoint.new(1,palette.background)
+        })},cover)
+        local graphic=block(cover,UDim2.new(.5,-36,.5,-36),UDim2.fromOffset(72,72),palette.highlight,36)
+        graphic.BackgroundTransparency=0.90
+        create("UIStroke",{Color=palette.highlight,Thickness=2,Transparency=0.66},graphic)
+        local item=games[i]
+        if item then
+            local abbrev=tostring(item.title or "G"):sub(1,1):upper()
+            local letter=textAt(graphic,abbrev,29,palette.highlight,0,12,72,48,true)
+            letter.TextXAlignment=Enum.TextXAlignment.Center
+            if tonumber(item.universeId) then
+                imageOverlay(cover,"rbxthumb://type=GameIcon&id="..tostring(item.universeId).."&w=420&h=420")
             end
-            label(tile,"Infinite Yield",13,palette.text,9,83,166,24,true).Size=UDim2.new(1,-18,0,24)
-            label(tile,L("Команды и утилиты","Admin commands & tools"),10,palette.muted,9,111,162,27).Size=UDim2.new(1,-18,0,26)
-            local tag=frame(tile,7,137,76,13,palette.highlight,5,false)
-            tag.BackgroundTransparency=0.12
-            label(tag,"UNIVERSAL",9,palette.background,5,0,71,13,true)
-            local run=create("TextButton",{Text="",Size=UDim2.new(1,0,1,0),BackgroundTransparency=1},tile)
-            connect(run.MouseButton1Click,function() navigateTo("games","universal") end)
+            local title=textAt(tile,tostring(item.title or "Game"),12,palette.text,10,102,156,28,true)
+            title.Size=UDim2.new(1,-20,0,27)
+            local state=(item.id==lastLaunchedGameId and L("● НЕДАВНО","● RECENT") or
+                (isSupported(item) and L("● ТЕКУЩАЯ ИГРА","● CURRENT PLACE") or L("● В КАТАЛОГЕ","● IN CATALOG")))
+            local status=textAt(tile,state,9,palette.highlight,10,132,154,16,true)
+            status.Size=UDim2.new(1,-20,0,16)
+            local tap=create("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1)},tile)
+            connect(tap.MouseButton1Click,function() navigateTo("games","games") end)
         else
-            local symbols={"◎","⬡","∞"}
-            local sign=label(tile,symbols[i-1] or "+",42,palette.muted,0,20,160,61,true)
-            sign.Size=UDim2.new(1,0,0,61)
-            sign.TextXAlignment=Enum.TextXAlignment.Center
-            label(tile,L("СКОРО","COMING SOON"),12,palette.text,9,91,167,27,true).Size=UDim2.new(1,-18,0,27)
-            label(tile,L("Новый инструмент","More utilities later"),10,palette.muted,9,116,163,27).Size=UDim2.new(1,-18,0,27)
+            local q=quickLinks[((i-#games-1)%#quickLinks)+1]
+            local letter=textAt(graphic,q.initial,29,palette.highlight,0,12,72,48,true)
+            letter.TextXAlignment=Enum.TextXAlignment.Center
+            local title=textAt(tile,q.name,12,palette.text,10,102,159,29,true)
+            title.Size=UDim2.new(1,-20,0,28)
+            local sub=textAt(tile,q.sub,9,palette.muted,10,132,156,16,false)
+            sub.Size=UDim2.new(1,-20,0,16)
+            local tap=create("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1)},tile)
+            connect(tap.MouseButton1Click,function() navigateTo(q.tab,q.category) end)
         end
     end
 
+    section(scroll,"УНИВЕРСАЛЬНЫЕ СКРИПТЫ","UNIVERSAL SCRIPTS","games","universal")
+    local utils=block(scroll,nil,UDim2.new(1,-4,0,171),palette.background,0)
+    utils.BackgroundTransparency=1
+    for i=1,4 do
+        local tile=block(utils,UDim2.new((i-1)/4,(i-1)*3,0,0),UDim2.new(.25,-10,1,-2),palette.panel,12)
+        thinBorder(tile,i==1 and palette.highlight or palette.border,i==1 and .38 or .74)
+        if i==1 then
+            local banner=block(tile,UDim2.fromOffset(0,0),UDim2.new(1,0,0,100),Color3.fromRGB(31,16,53),0)
+            create("UIGradient",{Rotation=28,Color=ColorSequence.new({
+                ColorSequenceKeypoint.new(0,Color3.fromRGB(28,17,47)),
+                ColorSequenceKeypoint.new(.6,Color3.fromRGB(64,28,99)),
+                ColorSequenceKeypoint.new(1,Color3.fromRGB(102,44,145))
+            })},banner)
+            local ray=block(banner,UDim2.new(.5,-47,.5,-47),UDim2.fromOffset(94,94),Color3.fromRGB(203,146,255),47)
+            ray.BackgroundTransparency=.92
+            create("UIStroke",{Color=Color3.fromRGB(197,143,255),Thickness=2.4,Transparency=.30},ray)
+            local iy=textAt(banner,"IY",40,Color3.fromRGB(229,195,255),0,21,165,56,true)
+            iy.Size=UDim2.new(1,0,0,56)
+            iy.TextXAlignment=Enum.TextXAlignment.Center
+            if premiumImageId(PREMIUM_ASSETS.infiniteYield) then
+                imageOverlay(banner,PREMIUM_ASSETS.infiniteYield)
+            end
+            local name=textAt(tile,"Infinite Yield",13,palette.text,10,107,165,21,true)
+            name.Size=UDim2.new(1,-20,0,22)
+            local sub=textAt(tile,L("Админ-команды и утилиты","Admin commands & utilities"),10,palette.muted,10,128,164,27,false)
+            sub.Size=UDim2.new(1,-20,0,26)
+            local badge=block(tile,UDim2.fromOffset(10,155),UDim2.fromOffset(85,14),palette.highlight,5)
+            textAt(badge,"UNIVERSAL",9,palette.background,8,0,77,14,true)
+            local tap=create("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1)},tile)
+            connect(tap.MouseButton1Click,function() navigateTo("games","universal") end)
+        else
+            local symbol={"+","+","+"}
+            local future=block(tile,UDim2.new(.5,-34,0,24),UDim2.fromOffset(68,68),palette.card,34)
+            create("UIStroke",{Color=palette.border,Thickness=1,Transparency=.58},future)
+            local sign=textAt(future,symbol[i-1] or "+",29,palette.muted,0,9,68,49,true)
+            sign.TextXAlignment=Enum.TextXAlignment.Center
+            local soon=textAt(tile,L("СКОРО","COMING SOON"),11,palette.text,9,113,157,24,true)
+            soon.Size=UDim2.new(1,-18,0,24)
+            local sub=textAt(tile,L("Новые инструменты","More utilities soon"),9,palette.muted,9,140,160,18,false)
+            sub.Size=UDim2.new(1,-18,0,18)
+        end
+    end
     if not catalogOk then
-        local note=txt(sc,T("offline"),10,palette.alert,23)
-        note.Size=UDim2.new(1,-8,0,23)
+        local note=txt(scroll,T("offline"),10,palette.alert,24)
+        note.Size=UDim2.new(1,-8,0,24)
     end
 end
 
@@ -1446,25 +1472,18 @@ local top=create("Frame",{Size=UDim2.new(1,0,0,77),Active=true,
 -- Fine green bottom accent, mirroring the reference's lime header line.
 create("Frame",{Position=UDim2.fromOffset(0,75),Size=UDim2.new(1,0,0,2),
     BackgroundColor3=palette.border,BorderSizePixel=0},top)
--- Small native fern emblem: no extra Roblox image ID needed.
-local logo=create("Frame",{Position=UDim2.fromOffset(22,15),
-    Size=UDim2.fromOffset(40,48),BackgroundTransparency=1},top)
-local stem=create("Frame",{Position=UDim2.fromOffset(19,3),
-    Size=UDim2.fromOffset(3,42),Rotation=25,BackgroundColor3=palette.highlight,
-    BorderSizePixel=0},logo)
-corner(stem,3)
-for i=0,4 do
-    local y=7+i*7
-    for side=-1,1,2 do
-        local segment=create("Frame",{
-            Position=UDim2.fromOffset(19 + side*(5 + math.floor(i*0.7)),y),
-            Size=UDim2.fromOffset(5,16-i),
-            Rotation=side==1 and (50+i*3) or -(52-i*2),
-            BackgroundColor3=palette.highlight,BorderSizePixel=0
-        },logo)
-        corner(segment,6)
-    end
-end
+-- Brand mark v0.2.26: single clean P monogram instead of many rotated
+-- tiny leaf rectangles (those looked broken at common UIScale values).
+local brandMark=create("Frame",{
+    Name="BrandMark",Position=UDim2.fromOffset(21,17),
+    Size=UDim2.fromOffset(42,42),BackgroundColor3=palette.highlight,
+    BorderSizePixel=0
+},top)
+corner(brandMark,11)
+local brandGlyph=txt(brandMark,"P",29,palette.background,42,Enum.TextXAlignment.Center)
+brandGlyph.Font=Enum.Font.GothamBold
+brandGlyph.Position=UDim2.fromOffset(0,-1)
+brandGlyph.Size=UDim2.fromOffset(42,42)
 titleLabel=txt(top,"Paporotnic Hub",24,palette.text,37)
 titleLabel.Font=Enum.Font.GothamBold
 titleLabel.Position=UDim2.fromOffset(67,10)
@@ -1482,14 +1501,14 @@ local function headerChip(textValue,x,w)
     local chip=create("Frame",{Position=UDim2.fromOffset(x,20),Size=UDim2.fromOffset(w,36),
         BackgroundColor3=palette.panel,BorderSizePixel=0},top)
     corner(chip,19)
-    create("UIStroke",{Color=palette.border,Thickness=1,Transparency=0.18},chip)
+    create("UIStroke",{Color=palette.border,Thickness=1,Transparency=0.67},chip)
     local t=txt(chip,textValue,11,palette.text,36,Enum.TextXAlignment.Center)
     t.Font=Enum.Font.GothamBold
     return chip,t
 end
 local stateChip,stateText=headerChip("●  ACCESS VERIFIED",326,170)
-local apiChip,apiText=headerChip("◈  KEY SYSTEM",510,139)
-local buildChip,buildText=headerChip("▣  HUB v0.2.25",663,150)
+local apiChip,apiText=headerChip("KEY SYSTEM",510,139)
+local buildChip,buildText=headerChip("HUB  v0.2.26",663,150)
 
 local profile=create("Frame",{Position=UDim2.new(1,-333,0,9),Size=UDim2.fromOffset(189,58),
     BackgroundColor3=palette.panel,BorderSizePixel=0},top)
@@ -1530,14 +1549,14 @@ create("UIGradient",{Rotation=90,Transparency=NumberSequence.new({
     NumberSequenceKeypoint.new(0,0.1),NumberSequenceKeypoint.new(1,1)
 })},sideAccent)
 local navOptions={
-    {"home",nil,"⌂  ","home"},
-    {"games","games","▣  ","dashboardShortGames"},
-    {"games","games","•  ","scriptsGame"},
-    {"games","universal","•  ","scriptsUniversal"},
-    {"releases",nil,"▤  ","releases"},
-    {"settings",nil,"⚙  ","settings"}
+    {"home",nil,"  ","home"},
+    {"games","games","  ","dashboardShortGames"},
+    {"games","games","   ","scriptsGame"},
+    {"games","universal","   ","scriptsUniversal"},
+    {"releases",nil,"  ","releases"},
+    {"settings",nil,"  ","settings"}
 }
-local scriptsGroup=txt(sidebar,"◇  SCRIPTS",12,palette.muted,25)
+local scriptsGroup=txt(sidebar,"SCRIPTS",11,palette.muted,25)
 scriptsGroup.Position=UDim2.fromOffset(26,138)
 scriptsGroup.Size=UDim2.fromOffset(164,25)
 scriptsGroup.Font=Enum.Font.GothamBold
@@ -1566,8 +1585,8 @@ local accessSection=create("Frame",{
     Size=UDim2.new(1,-25,0,223),BackgroundColor3=palette.panel,BorderSizePixel=0
 },sidebar)
 corner(accessSection,14)
-create("UIStroke",{Thickness=1,Color=palette.highlight,Transparency=0.72},accessSection)
-local sideTitle=txt(accessSection,"♛  "..T("dashboardAccess"),14,palette.text,30)
+create("UIStroke",{Thickness=1,Color=palette.border,Transparency=0.62},accessSection)
+local sideTitle=txt(accessSection,T("dashboardAccess"),14,palette.text,30)
 sideTitle.Font=Enum.Font.GothamBold
 sideTitle.Position=UDim2.fromOffset(12,10)
 sideTitle.Size=UDim2.new(1,-24,0,29)
@@ -1614,7 +1633,7 @@ local function rrPanel(y,height)
     local p=create("Frame",{Position=UDim2.fromOffset(0,y),Size=UDim2.fromOffset(295,height),
         BackgroundColor3=palette.panel,BorderSizePixel=0},rightRail)
     corner(p,13)
-    create("UIStroke",{Color=palette.border,Transparency=0.16,Thickness=1},p)
+    create("UIStroke",{Color=palette.border,Transparency=0.62,Thickness=1},p)
     return p
 end
 renderRightRail=function()
@@ -1673,10 +1692,10 @@ renderRightRail=function()
     local updates=rrPanel(485,150)
     rrLabel(updates,"↻  "..L("Обновления","Latest Updates"),15,palette.text,13,8,250,28,true)
     local recent={
+        {"v0.2.26",L("Чистый интерфейс","Clean Rework")},
         {"v0.2.25",L("Premium Dashboard","Premium Dashboard")},
         {"v0.2.24",L("Главная страница","Home Foundation")},
         {"v0.2.23",L("Universal Scripts","Universal Scripts")},
-        {"v0.2.22",L("Последний ключ","Recent Key")},
     }
     for i,r in ipairs(recent) do
         local y=40+(i-1)*26
@@ -2163,4 +2182,4 @@ local function playLaunchIntro()
 end
 
 task.spawn(playLaunchIntro)
-print("[Paporotnic Universal Launcher] v0.2.25 | PlaceId="..tostring(game.PlaceId))
+print("[Paporotnic Universal Launcher] v0.2.26 | PlaceId="..tostring(game.PlaceId))
