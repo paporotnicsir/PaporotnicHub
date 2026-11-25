@@ -1,4 +1,4 @@
--- PAPOROTNIC HUB | universal launcher v0.2.34
+-- PAPOROTNIC HUB | universal launcher v0.2.35
 -- 3-second loading gate, key-only entry, and quiet accent-glow interface.
 -- Based on the user's v0.2.14 launcher; auth API and game module flow preserved.
 
@@ -60,7 +60,7 @@ local function gameIconContent(item)
 end
 
 local FALLBACK = {
-    version = "0.2.34 (offline catalog)",
+    version = "0.2.35 (offline catalog)",
     latestVersion = "Paporotnic Hub Core v0.2.8",
     lifetimePrice = "$ ?? / TBA",
     announcement = "Welcome, LIL Paporotnics! The universal hub is online.",
@@ -75,6 +75,9 @@ local FALLBACK = {
             id = "release-020", version = "v0.2.0", name = "Launcher redesign",
             summary = "Larger interface, fern background and a dedicated Releases page.",
             updates = {
+                {version = "v0.2.35", title = "Panel-linked dividers · avatar backplate",
+                  body = "Header and sidebar separators now follow their surface colors; avatar background can be White or Theme.",
+                  bodyRu = "Разделители берут цвет верхней и боковой панелей; фон аватарки переключается между белым и цветом темы."},
                 {version = "v0.2.34", title = "Header control colors · themed borders",
                   body = "Independent badge and profile/button colors, live accent-colored shell lines and borderless quick actions.",
                   bodyRu = "Отдельные цвета плашек и кнопок сверху, линии под цвет акцента, блок Switch Key без подложки."},
@@ -256,7 +259,7 @@ local strings = {
         releaseSub="Новости и изменения Paporotnic Hub", totalGames="Игр в каталоге", authState="Статус доступа",
         accessPublic="PUBLIC / TEST", accessGranted="Ключ активирован", accessNeed="Ожидает ключ",
         patches="ПОДОБНОВЛЕНИЙ", expandedHint="Нажми на релиз, чтобы увидеть изменения",
-        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.34",
+        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.35",
         themeHeading="ТЕМА ОФОРМЛЕНИЯ", themeHint="Изменения применяются сразу. Сохранение работает, если исполнитель поддерживает запись файлов.",
         themeForest="ЛЕСНАЯ", themeOcean="НОЧНОЙ ОКЕАН", themeEmber="ЗАКАТ", themeViolet="ФИОЛЕТОВАЯ", themeActive="ВЫБРАНО",
          gateSubtitle="Для доступа к хабу требуется ключ", gateIdle="Введите ключ для продолжения.",
@@ -323,7 +326,7 @@ local strings = {
         releaseSub="News and changes for Paporotnic Hub", totalGames="Games in catalog", authState="Access status",
         accessPublic="PUBLIC / TEST", accessGranted="Key activated", accessNeed="Awaiting key",
         patches="PATCHES", expandedHint="Click a release to view its updates",
-        releaseBuild="LAUNCHER BUILD: v0.2.34",
+        releaseBuild="LAUNCHER BUILD: v0.2.35",
         themeHeading="COLOR THEME", themeHint="Themes apply instantly. Saving needs executor file access.",
         themeForest="FOREST", themeOcean="NIGHT OCEAN", themeEmber="SUNSET", themeViolet="VIOLET", themeActive="ACTIVE",
          gateSubtitle="An access key is required to continue", gateIdle="Enter your key to continue.",
@@ -413,6 +416,7 @@ local sidebarSurfaceHex = nil
 local headerBadgesHex = nil  -- ACCESS VERIFIED / KEY SYSTEM / HUB VERSION
 local headerActionsHex = nil -- profile, settings, minimize and close
 local sidebarOpacity = 0 -- 0 = solid, .75 = noticeably translucent
+local avatarBackplateMode = "white" -- 'white' (default) or 'theme'; no extra HEX setting
 local showFoliage = true
 local lastLaunchedGameId = nil
 do
@@ -435,6 +439,9 @@ do
                 if type(saved.sidebarOpacity)=="number" and saved.sidebarOpacity>=0 and saved.sidebarOpacity<=0.75 then
                     sidebarOpacity=saved.sidebarOpacity
                 end
+                if saved.avatarBackplateMode=="white" or saved.avatarBackplateMode=="theme" then
+                    avatarBackplateMode=saved.avatarBackplateMode
+                end
                 if saved.showFoliage == false then showFoliage=false end
                 if saved.language=="ru" or saved.language=="en" then lang=saved.language end
                 if saved.rememberMe == true and supportsSessionFiles then rememberMe=true end
@@ -451,6 +458,15 @@ if customAccentHex then
     local _,accentColor=parseAccentHex(customAccentHex)
     if accentColor then palette.highlight=accentColor end
 end
+-- Keep separators visually tied to the PANEL they border rather than the
+-- separately customizable accent. This slight lift preserves each panel hue.
+local function separatorShade(surface)
+    return Color3.new(
+        math.clamp(surface.R * 1.9 + 0.11, 0, 1),
+        math.clamp(surface.G * 1.9 + 0.11, 0, 1),
+        math.clamp(surface.B * 1.9 + 0.11, 0, 1)
+    )
+end
 local function syncSurfacePalette()
     local _,topColor=parseSurfaceHex(headerSurfaceHex)
     local _,sideColor=parseSurfaceHex(sidebarSurfaceHex)
@@ -461,6 +477,9 @@ local function syncSurfacePalette()
     -- With no override, each group follows the current theme's card/panel color.
     palette.headerBadges=badgeColor or palette.panel
     palette.headerActions=actionColor or palette.panel
+    palette.headerDividerColor=separatorShade(palette.headerSurface)
+    palette.sidebarDividerColor=separatorShade(palette.sidebarSurface)
+    palette.avatarBackplate=avatarBackplateMode=="white" and Color3.fromRGB(255,255,255) or palette.card
 end
 syncSurfacePalette()
 local themeBindings = setmetatable({}, {__mode="k"})
@@ -477,7 +496,7 @@ local function savePreferences()
         HttpService:JSONEncode({theme=themeName, accentHex=customAccentHex,
             headerSurfaceHex=headerSurfaceHex, sidebarSurfaceHex=sidebarSurfaceHex,
             headerBadgesHex=headerBadgesHex, headerActionsHex=headerActionsHex,
-            sidebarOpacity=sidebarOpacity,
+            sidebarOpacity=sidebarOpacity, avatarBackplateMode=avatarBackplateMode,
             showFoliage=showFoliage, language=lang, rememberMe=rememberMe,
             recentGameId=lastLaunchedGameId}))
     return ok
@@ -772,6 +791,14 @@ local function setSidebarOpacity(value)
     sidebarOpacity=value
     local side=surfaceFrames.sidebar
     if side and side.Parent then side.BackgroundTransparency=value end
+    savePreferences()
+    return true
+end
+local function setAvatarBackplate(mode)
+    if mode~="white" and mode~="theme" then return false end
+    avatarBackplateMode=mode
+    palette.avatarBackplate=mode=="white" and Color3.fromRGB(255,255,255) or palette.card
+    repaintPalette(true) -- live update; do not jump to top of Settings
     savePreferences()
     return true
 end
@@ -1762,7 +1789,7 @@ local function renderSettings()
         Name="ThemeEditorScroll",Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
         BorderSizePixel=0,ScrollBarThickness=4,ScrollBarImageColor3=palette.highlight,
         ScrollingDirection=Enum.ScrollingDirection.Y,
-        CanvasSize=UDim2.fromOffset(0,1630)
+        CanvasSize=UDim2.fromOffset(0,1755)
     },content)
     scroll.CanvasPosition=Vector2.new(0,restoreScrollY)
     connect(scroll:GetPropertyChangedSignal("CanvasPosition"),function()
@@ -1774,7 +1801,7 @@ local function renderSettings()
         end
     end)
     local page=create("Frame",{
-        Size=UDim2.new(1,-14,0,1618),BackgroundTransparency=1,BorderSizePixel=0
+        Size=UDim2.new(1,-14,0,1744),BackgroundTransparency=1,BorderSizePixel=0
     },scroll)
     local heading=txt(page,T("settings"),22,palette.text,38)
     heading.Font=Enum.Font.GothamBold
@@ -1985,20 +2012,47 @@ local function renderSettings()
         "0% is solid, 75% lets the wallpaper through; controls stay opaque."),11,palette.muted,31)
     opacityHint.Position=UDim2.fromOffset(0,1145)
 
+    -- Avatar image backplate: White is the default; Theme follows palette.card.
+    -- These controls update the ImageLabel immediately and preserve scroll.
+    local avatarHeading=txt(page,L("ФОН АВАТАРКИ", "AVATAR BACKPLATE"),14,palette.text,24)
+    avatarHeading.Font=Enum.Font.GothamBold
+    avatarHeading.Position=UDim2.fromOffset(0,1187)
+    local avatarChoices={}
+    local function refreshAvatarChoices()
+        for _,entry in ipairs(avatarChoices) do
+            local selected=avatarBackplateMode==entry.mode
+            entry.button.BackgroundColor3=selected and palette.highlight or palette.card
+            entry.button.TextColor3=selected and palette.background or palette.text
+        end
+    end
+    for i,mode in ipairs({"white", "theme"}) do
+        local label=mode=="white" and L("БЕЛЫЙ", "WHITE") or L("ЦВЕТ ТЕМЫ", "THEME")
+        local choice=button(page,label,136,35,function()
+            if setAvatarBackplate(mode) then refreshAvatarChoices() end
+        end,false)
+        choice.Name="AvatarBackplate_"..mode
+        choice.Position=UDim2.fromOffset((i-1)*147,1218)
+        table.insert(avatarChoices,{mode=mode,button=choice})
+    end
+    refreshAvatarChoices()
+    local avatarNote=txt(page,L("Белый фон по умолчанию; цвет темы использует фон карточки.",
+        "White by default; Theme uses the current card background color."),11,palette.muted,29)
+    avatarNote.Position=UDim2.fromOffset(0,1258)
+
     local foliageToggle=button(page,showFoliage and L("ЛИСТВА: ВКЛ", "FOLIAGE: ON")
         or L("ЛИСТВА: ВЫКЛ", "FOLIAGE: OFF"),206,34,function()
         setFoliageVisible(not showFoliage)
         if alive then render() end
     end,showFoliage)
-    foliageToggle.Position=UDim2.fromOffset(0,1197)
+    foliageToggle.Position=UDim2.fromOffset(0,1312)
     local foliageInfo=txt(page,L("Декоративные папоротники по краям. Логотип останется.",
         "Decorative corner ferns; the logo stays visible."),12,palette.muted,32)
-    foliageInfo.Position=UDim2.fromOffset(222,1197)
+    foliageInfo.Position=UDim2.fromOffset(222,1312)
     foliageInfo.Size=UDim2.new(1,-230,0,32)
 
     local rememberHeading=txt(page,T("rememberTitle"),16,palette.text,28)
     rememberHeading.Font=Enum.Font.GothamBold
-    rememberHeading.Position=UDim2.fromOffset(0,1255)
+    rememberHeading.Position=UDim2.fromOffset(0,1370)
     local rememberToggle=button(page,rememberMe and T("rememberOn") or T("rememberOff"),246,38,function()
         if not supportsSessionFiles then info(T("rememberUnavailable"),true);return end
         if rememberMe then
@@ -2025,29 +2079,29 @@ local function renderSettings()
         end
         if alive then render() end
     end,rememberMe)
-    rememberToggle.Position=UDim2.fromOffset(0,1290)
+    rememberToggle.Position=UDim2.fromOffset(0,1405)
     if not supportsSessionFiles then
         rememberToggle.Active=false
         rememberToggle.AutoButtonColor=false
     end
     local rememberDesc=txt(page,T("rememberHint"),12,palette.muted,34)
-    rememberDesc.Position=UDim2.fromOffset(261,1292)
+    rememberDesc.Position=UDim2.fromOffset(261,1407)
     rememberDesc.Size=UDim2.new(1,-270,0,34)
     local rememberWarning=txt(page,T("rememberWarning"),11,palette.alert,32)
-    rememberWarning.Position=UDim2.fromOffset(0,1334)
+    rememberWarning.Position=UDim2.fromOffset(0,1449)
     rememberWarning.Size=UDim2.new(1,-15,0,32)
     local recentHint=txt(page,T("recentWarning"),11,palette.alert,34)
-    recentHint.Position=UDim2.fromOffset(0,1363)
+    recentHint.Position=UDim2.fromOffset(0,1478)
     recentHint.Size=UDim2.new(1,-15,0,34)
     recentHint.TextWrapped=true
     local hideHint=txt(page,T("hide"),13,palette.muted,28)
-    hideHint.Position=UDim2.fromOffset(0,1409)
+    hideHint.Position=UDim2.fromOffset(0,1524)
     local exit=button(page,T("exit"),260,39,function()
         if global.__PaporotnicLauncherStop then global.__PaporotnicLauncherStop() end
     end,false)
-    exit.Position=UDim2.fromOffset(0,1440)
+    exit.Position=UDim2.fromOffset(0,1555)
     local note=txt(page,T("note"),12,palette.muted,36)
-    note.Position=UDim2.fromOffset(0,1482)
+    note.Position=UDim2.fromOffset(0,1597)
     note.Size=UDim2.new(1,-15,0,32)
 end
 
@@ -2127,11 +2181,10 @@ local top=create("Frame",{Size=UDim2.new(1,0,0,77),Active=true,
 -- Explicit binding avoids ambiguous matching when panel color equals background.
 themeBindings[top]={BackgroundColor3="headerSurface"}
 surfaceFrames.header=top
--- Structural dividing line follows the user's CURRENT accent, not a stale
--- theme's palette.border color captured when the dashboard was created.
+-- Divider tracks the Top Bar surface even if its HEX override changes.
 local headerDivider=create("Frame",{Position=UDim2.fromOffset(0,75),Size=UDim2.new(1,0,0,2),
-    BackgroundColor3=palette.highlight,BackgroundTransparency=0.60,BorderSizePixel=0},top)
-themeBindings[headerDivider]={BackgroundColor3="highlight"}
+    BackgroundColor3=palette.headerDividerColor,BackgroundTransparency=0.20,BorderSizePixel=0},top)
+themeBindings[headerDivider]={BackgroundColor3="headerDividerColor"}
 -- Actual fern icon, manually extracted from the visual reference (not a faux P).
 local brandMark=create("Frame",{
     Name="BrandMark",Position=UDim2.fromOffset(21,13),
@@ -2153,8 +2206,8 @@ local subtitle=txt(top,"ROBLOX SCRIPT PLATFORM",10,palette.muted,20)
 subtitle.Position=UDim2.fromOffset(79,47)
 subtitle.Size=UDim2.fromOffset(239,19)
 local accentLine=create("Frame",{Position=UDim2.fromOffset(0,75),
-    Size=UDim2.fromOffset(238,2),BackgroundColor3=palette.highlight,BorderSizePixel=0},top)
-themeBindings[accentLine]={BackgroundColor3="highlight"}
+    Size=UDim2.fromOffset(238,2),BackgroundColor3=palette.headerDividerColor,BorderSizePixel=0},top)
+themeBindings[accentLine]={BackgroundColor3="headerDividerColor"}
 create("UIGradient",{Rotation=0,Transparency=NumberSequence.new({
     NumberSequenceKeypoint.new(0,0),NumberSequenceKeypoint.new(1,0.8)
 })},accentLine)
@@ -2173,7 +2226,7 @@ local function headerChip(textValue,x,w)
 end
 local stateChip,stateText=headerChip("●  ACCESS VERIFIED",326,170)
 local apiChip,apiText=headerChip("KEY SYSTEM",510,139)
-local buildChip,buildText=headerChip("HUB  v0.2.34",663,150)
+local buildChip,buildText=headerChip("HUB  v0.2.35",663,150)
 
 local profile=create("Frame",{Position=UDim2.new(1,-333,0,9),Size=UDim2.fromOffset(189,58),
     BackgroundColor3=palette.headerActions,BorderSizePixel=0},top)
@@ -2182,7 +2235,8 @@ themeBindings[profile]={BackgroundColor3="headerActions"}
 table.insert(chromeRefs.headerActions,profile)
 local avatar=create("ImageLabel",{Position=UDim2.fromOffset(8,6),Size=UDim2.fromOffset(46,46),
     Image="rbxthumb://type=AvatarHeadShot&id="..tostring(localPlayer.UserId).."&w=150&h=150",
-    BackgroundColor3=palette.card,BorderSizePixel=0},profile)
+    BackgroundColor3=palette.avatarBackplate,BorderSizePixel=0},profile)
+themeBindings[avatar]={BackgroundColor3="avatarBackplate"}
 corner(avatar,23)
 local avatarOutline=create("UIStroke",{Color=palette.highlight,Thickness=1.8,Transparency=0.30},avatar)
 themeBindings[avatarOutline]={Color="highlight"}
@@ -2218,8 +2272,8 @@ local sidebar=create("Frame",{
 themeBindings[sidebar]={BackgroundColor3="sidebarSurface"}
 surfaceFrames.sidebar=sidebar
 local sidebarDivider=create("Frame",{Position=UDim2.new(1,-1,0,0),Size=UDim2.new(0,1,1,0),
-    BackgroundColor3=palette.highlight,BackgroundTransparency=0.70,BorderSizePixel=0},sidebar)
-themeBindings[sidebarDivider]={BackgroundColor3="highlight"}
+    BackgroundColor3=palette.sidebarDividerColor,BackgroundTransparency=0.12,BorderSizePixel=0},sidebar)
+themeBindings[sidebarDivider]={BackgroundColor3="sidebarDividerColor"}
 sidebar.ClipsDescendants=true
 cornerFerns=create("ImageLabel",{
     Name="LayeredFernCornerDecor",Position=UDim2.fromOffset(0,-77),
@@ -2229,8 +2283,8 @@ cornerFerns=create("ImageLabel",{
 },sidebar)
 attachLayer(cornerFerns,"fernCorners")
 local sideAccent=create("Frame",{Position=UDim2.fromOffset(0,0),Size=UDim2.fromOffset(4,332),
-    BorderSizePixel=0,BackgroundColor3=palette.highlight,BackgroundTransparency=0.88},sidebar)
-themeBindings[sideAccent]={BackgroundColor3="highlight"}
+    BorderSizePixel=0,BackgroundColor3=palette.sidebarDividerColor,BackgroundTransparency=0.88},sidebar)
+themeBindings[sideAccent]={BackgroundColor3="sidebarDividerColor"}
 create("UIGradient",{Rotation=90,Transparency=NumberSequence.new({
     NumberSequenceKeypoint.new(0,0.1),NumberSequenceKeypoint.new(1,1)
 })},sideAccent)
@@ -2256,8 +2310,8 @@ for i,row in ipairs(navOptions) do
     table.insert(sidebarButtons,{button=nav,page=page,category=category,prefix=icon,labelKey=labelKey})
 end
 local separator=create("Frame",{Position=UDim2.fromOffset(14,315),Size=UDim2.fromOffset(194,1),
-    BackgroundColor3=palette.highlight,BackgroundTransparency=0.76,BorderSizePixel=0},sidebar)
-themeBindings[separator]={BackgroundColor3="highlight"}
+    BackgroundColor3=palette.sidebarDividerColor,BackgroundTransparency=0.16,BorderSizePixel=0},sidebar)
+themeBindings[separator]={BackgroundColor3="sidebarDividerColor"}
 
 -- No duplicated "YOUR ACCESS" summary here: the top profile and right-hand
 -- Access Status already show the license, leaving the sidebar for actions.
@@ -2371,10 +2425,10 @@ renderRightRail=function()
     local updates=rrPanel(485,150)
     rrLabel(updates,L("Обновления","Latest Updates"),15,palette.text,13,8,250,28,true)
     local recent={
+        {"v0.2.35",L("Разделители и аватарка","Dividers & Avatar")},
         {"v0.2.34",L("Цвета кнопок и линий","Chrome Colors")},
         {"v0.2.33",L("Прозрачность боковины","Sidebar Opacity")},
         {"v0.2.32",L("Исправления цветов и карточек","Panel & Card Fixes")},
-        {"v0.2.31",L("Настройка панелей","Panel Colors")},
     }
     for i,r in ipairs(recent) do
         local y=40+(i-1)*26
@@ -2867,4 +2921,4 @@ local function playLaunchIntro()
 end
 
 task.spawn(playLaunchIntro)
-print("[Paporotnic Universal Launcher] v0.2.34 | PlaceId="..tostring(game.PlaceId))
+print("[Paporotnic Universal Launcher] v0.2.35 | PlaceId="..tostring(game.PlaceId))
