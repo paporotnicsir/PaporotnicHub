@@ -1,4 +1,4 @@
--- PAPOROTNIC HUB | universal launcher v0.2.38
+-- PAPOROTNIC HUB | universal launcher v0.2.39
 -- 3-second loading gate, key-only entry, and quiet accent-glow interface.
 -- Based on the user's v0.2.14 launcher; auth API and game module flow preserved.
 
@@ -60,7 +60,7 @@ local function gameIconContent(item)
 end
 
 local FALLBACK = {
-    version = "0.2.38 (offline catalog)",
+    version = "0.2.39 (offline catalog)",
     latestVersion = "Paporotnic Hub Core v0.2.8",
     lifetimePrice = "$ ?? / TBA",
     announcement = "Welcome, LIL Paporotnics! The universal hub is online.",
@@ -75,6 +75,9 @@ local FALLBACK = {
             id = "release-020", version = "v0.2.0", name = "Launcher redesign",
             summary = "Larger interface, fern background and a dedicated Releases page.",
             updates = {
+                {version = "v0.2.39", title = "Active Status Indicator",
+                  body = "Added a fixed green status dot with a subtle glow to the ACTIVE badge.",
+                  bodyRu = "В плашку ACTIVE добавлен зелёный индикатор с лёгким свечением."},
                 {version = "v0.2.38", title = "Banner Position Fix",
                   body = "Raised the signature character by 40 pixels and versioned the updated image.",
                   bodyRu = "Персонаж поднят на 40 пикселей; баннер обновляется без ручной очистки кэша."},
@@ -268,7 +271,7 @@ local strings = {
         releaseSub="Новости и изменения Paporotnic Hub", totalGames="Игр в каталоге", authState="Статус доступа",
         accessPublic="PUBLIC / TEST", accessGranted="Ключ активирован", accessNeed="Ожидает ключ",
         patches="ПОДОБНОВЛЕНИЙ", expandedHint="Нажми на релиз, чтобы увидеть изменения",
-        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.38",
+        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.39",
         themeHeading="ТЕМА ОФОРМЛЕНИЯ", themeHint="Изменения применяются сразу. Сохранение работает, если исполнитель поддерживает запись файлов.",
         themeForest="ЛЕСНАЯ", themeOcean="НОЧНОЙ ОКЕАН", themeEmber="ЗАКАТ", themeViolet="ФИОЛЕТОВАЯ", themeActive="ВЫБРАНО",
          gateSubtitle="Для доступа к хабу требуется ключ", gateIdle="Введите ключ для продолжения.",
@@ -335,7 +338,7 @@ local strings = {
         releaseSub="News and changes for Paporotnic Hub", totalGames="Games in catalog", authState="Access status",
         accessPublic="PUBLIC / TEST", accessGranted="Key activated", accessNeed="Awaiting key",
         patches="PATCHES", expandedHint="Click a release to view its updates",
-        releaseBuild="LAUNCHER BUILD: v0.2.38",
+        releaseBuild="LAUNCHER BUILD: v0.2.39",
         themeHeading="COLOR THEME", themeHint="Themes apply instantly. Saving needs executor file access.",
         themeForest="FOREST", themeOcean="NIGHT OCEAN", themeEmber="SUNSET", themeViolet="VIOLET", themeActive="ACTIVE",
          gateSubtitle="An access key is required to continue", gateIdle="Enter your key to continue.",
@@ -2254,7 +2257,7 @@ local function headerChip(textValue,x,w)
 end
 local stateChip,stateText=headerChip("●  ACCESS VERIFIED",326,170)
 local apiChip,apiText=headerChip("KEY SYSTEM",510,139)
-local buildChip,buildText=headerChip("HUB  v0.2.38",663,150)
+local buildChip,buildText=headerChip("HUB  v0.2.39",663,150)
 
 local profile=create("Frame",{Position=UDim2.new(1,-333,0,9),Size=UDim2.fromOffset(189,58),
     BackgroundColor3=palette.headerActions,BorderSizePixel=0},top)
@@ -2404,7 +2407,21 @@ renderRightRail=function()
         BackgroundColor3=palette.highlight,BackgroundTransparency=0.83,BorderSizePixel=0},access)
     corner(active,12)
     create("UIStroke",{Color=palette.highlight,Thickness=1,Transparency=0.21},active)
-    rrLabel(active,"ACTIVE",10,palette.highlight,7,2,60,18,true)
+    rrLabel(active,"ACTIVE",10,palette.highlight,7,2,42,18,true)
+    do
+        local glow = create("Frame",{Name="ActiveStatusGlow",Position=UDim2.fromOffset(49,5),
+            Size=UDim2.fromOffset(12,12),BackgroundColor3=Color3.fromRGB(85,255,56),
+            BackgroundTransparency=0.88,BorderSizePixel=0},active)
+        corner(glow,6)
+        local inner = create("Frame",{Name="ActiveStatusHalo",Position=UDim2.fromOffset(51,7),
+            Size=UDim2.fromOffset(8,8),BackgroundColor3=Color3.fromRGB(85,255,56),
+            BackgroundTransparency=0.65,BorderSizePixel=0},active)
+        corner(inner,4)
+        local dot = create("Frame",{Name="ActiveStatusDot",Position=UDim2.fromOffset(52,8),
+            Size=UDim2.fromOffset(6,6),BackgroundColor3=Color3.fromRGB(85,255,56),
+            BackgroundTransparency=0,BorderSizePixel=0},active)
+        corner(dot,3)
+    end
     local timeText= approvedKeyKind=="temporary" and
         (type(approvedSecondsLeft)=="number" and
             (tostring(math.max(1,math.ceil(approvedSecondsLeft/3600))).."h "..L("осталось","left")) or L("Ограничен","Limited")) or L("Никогда","Never")
@@ -2456,10 +2473,10 @@ renderRightRail=function()
     local updates=rrPanel(485,150)
     rrLabel(updates,L("Обновления","Latest Updates"),15,palette.text,13,8,250,28,true)
     local recent={
+        {"v0.2.39",L("Индикатор активности","Active Status Indicator")},
         {"v0.2.38",L("Положение баннера","Banner Position Fix")},
         {"v0.2.37",L("Фирменный баннер","Signature Artwork")},
         {"v0.2.36",L("Исправление фона аватарки","Avatar Backplate Fix")},
-        {"v0.2.35",L("Разделители и аватарка","Dividers & Avatar")},
     }
     for i,r in ipairs(recent) do
         local y=40+(i-1)*26
