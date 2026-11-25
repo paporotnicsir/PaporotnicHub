@@ -1,4 +1,4 @@
--- PAPOROTNIC HUB | universal launcher v0.2.23
+-- PAPOROTNIC HUB | universal launcher v0.2.24
 -- 3-second loading gate, key-only entry, and quiet accent-glow interface.
 -- Based on the user's v0.2.14 launcher; auth API and game module flow preserved.
 
@@ -19,7 +19,7 @@ end
 local BASE = "https://raw.githubusercontent.com/paporotnicsir/PaporotnicHub/refs/heads/main/"
 local CATALOG_URL = BASE .. "catalog.json"
 local FALLBACK = {
-    version = "0.2.23 (offline catalog)",
+    version = "0.2.24 (offline catalog)",
     latestVersion = "Paporotnic Hub Core v0.2.8",
     lifetimePrice = "$ ?? / TBA",
     announcement = "Welcome, LIL Paporotnics! The universal hub is online.",
@@ -34,6 +34,9 @@ local FALLBACK = {
             id = "release-020", version = "v0.2.0", name = "Launcher redesign",
             summary = "Larger interface, fern background and a dedicated Releases page.",
             updates = {
+                {version = "v0.2.24", title = "Home Dashboard Foundation",
+                  body = "A new dashboard, sidebar navigation, featured catalog module, access summary, recent game, quick launch and changelog.",
+                  bodyRu = "Новый Home Dashboard: боковое меню, главный модуль каталога, доступ, последняя игра, быстрый запуск и обновления."},
                 {version = "v0.2.23", title = "Game & Universal Script categories",
                   body = "Scripts now separates game-specific modules and universal tools. Infinite Yield runs from the official EdgeIY repository after key verification.",
                   bodyRu = "Скрипты разделены на игровые и универсальные. Infinite Yield запускается из официального EdgeIY только после проверки ключа."},
@@ -122,6 +125,24 @@ end
 
 local strings = {
     ru = {
+        dashboardFeatured="ВЫБРАННЫЙ МОДУЛЬ", dashboardWelcome="Добро пожаловать в Paporotnic Hub",
+        dashboardLead="Панель управления твоими скриптами", dashboardLaunch="ЗАПУСТИТЬ МОДУЛЬ",
+        dashboardBrowse="СМОТРЕТЬ ИГРЫ", dashboardRecent="НЕДАВНЯЯ ИГРА",
+        dashboardDiscover="ДОСТУПНЫЕ ИГРЫ", dashboardUniversal="УНИВЕРСАЛЬНЫЕ",
+        dashboardOpen="ОТКРЫТЬ РАЗДЕЛ", dashboardAccess="МОЙ ДОСТУП",
+        dashboardAccessStatus="Статус", dashboardAccessType="Тип ключа", dashboardLifetime="ПОСТОЯННЫЙ",
+        dashboardTemporary="ВРЕМЕННЫЙ", dashboardVerified="ПОДТВЕРЖДЁН",
+        dashboardRemember="Автовход", dashboardOn="Вкл", dashboardOff="Выкл",
+        dashboardServer="СЕРВЕР АВТОРИЗАЦИИ", dashboardServerChecked="Ключ проверен через VPS",
+        dashboardServerNote="Это статус последней проверки, а не мониторинг 24/7.",
+        dashboardUpdates="ОБНОВЛЕНИЯ", dashboardEmpty="Пока не запускались игровые модули",
+        dashboardCurrent="ТЕКУЩИЙ ПЛЕЙС", dashboardOther="ИГРА В КАТАЛОГЕ",
+        dashboardNoModule="Добавь игры в catalog.json, чтобы они появились здесь.",
+        dashboardTip="Универсальные скрипты запускаются вручную.",
+        dashboardIYInfo="Infinite Yield · EdgeIY · сторонний код",
+        dashboardNavigation="НАВИГАЦИЯ", dashboardShortGames="ИГРЫ", dashboardShortUniversal="UNIVERSAL",
+        dashboardShortSettings="НАСТРОЙКИ", dashboardSideAccess="ДОСТУП АКТИВЕН",
+        dashboardNoRecent="Недавних запусков пока нет",
         searchHint="Поиск игры...", noSearchResults="Игры по запросу не найдены",
         scriptsGame="ИГРОВЫЕ СКРИПТЫ", scriptsUniversal="УНИВЕРСАЛЬНЫЕ",
         universalTitle="УНИВЕРСАЛЬНЫЕ СКРИПТЫ", universalSub="Инструменты, не привязанные к конкретному плейсу.",
@@ -164,13 +185,31 @@ local strings = {
         releaseSub="Новости и изменения Paporotnic Hub", totalGames="Игр в каталоге", authState="Статус доступа",
         accessPublic="PUBLIC / TEST", accessGranted="Ключ активирован", accessNeed="Ожидает ключ",
         patches="ПОДОБНОВЛЕНИЙ", expandedHint="Нажми на релиз, чтобы увидеть изменения",
-        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.23 (TEST)",
+        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.24 (TEST)",
         themeHeading="ТЕМА ОФОРМЛЕНИЯ", themeHint="Изменения применяются сразу. Сохранение работает, если исполнитель поддерживает запись файлов.",
         themeForest="ЛЕСНАЯ", themeOcean="НОЧНОЙ ОКЕАН", themeEmber="ЗАКАТ", themeViolet="ФИОЛЕТОВАЯ", themeActive="ВЫБРАНО",
          gateSubtitle="Для доступа к хабу требуется ключ", gateIdle="Введите ключ для продолжения.",
          gateProgress="ПОДГОТОВКА ЛАУНЧЕРА", gateLoading="ЗАГРУЗКА", gateReady="ГОТОВО", gateClose="Закрыть лаунчер"
     },
     en = {
+        dashboardFeatured="FEATURED MODULE", dashboardWelcome="Welcome to Paporotnic Hub",
+        dashboardLead="Your scripts control center", dashboardLaunch="LAUNCH MODULE",
+        dashboardBrowse="BROWSE GAMES", dashboardRecent="RECENTLY PLAYED",
+        dashboardDiscover="AVAILABLE GAMES", dashboardUniversal="UNIVERSAL TOOLS",
+        dashboardOpen="OPEN TOOLS", dashboardAccess="YOUR ACCESS",
+        dashboardAccessStatus="Status", dashboardAccessType="Key type", dashboardLifetime="LIFETIME",
+        dashboardTemporary="TEMPORARY", dashboardVerified="VERIFIED",
+        dashboardRemember="Remember Me", dashboardOn="On", dashboardOff="Off",
+        dashboardServer="VERIFICATION SERVER", dashboardServerChecked="Key verified by VPS",
+        dashboardServerNote="Last verification only; not a live uptime monitor.",
+        dashboardUpdates="LATEST UPDATES", dashboardEmpty="No game module launched yet",
+        dashboardCurrent="CURRENT PLACE", dashboardOther="CATALOG GAME",
+        dashboardNoModule="Add games to catalog.json to show them here.",
+        dashboardTip="Third-party universal tools run only when clicked.",
+        dashboardIYInfo="Infinite Yield · EdgeIY · third-party code",
+        dashboardNavigation="NAVIGATION", dashboardShortGames="GAMES", dashboardShortUniversal="UNIVERSAL",
+        dashboardShortSettings="SETTINGS", dashboardSideAccess="ACCESS GRANTED",
+        dashboardNoRecent="No recent launches yet",
         searchHint="Search games...", noSearchResults="No matching games",
         scriptsGame="GAME SCRIPTS", scriptsUniversal="UNIVERSAL SCRIPTS",
         universalTitle="UNIVERSAL SCRIPTS", universalSub="Tools that do not target a single Roblox place.",
@@ -213,7 +252,7 @@ local strings = {
         releaseSub="News and changes for Paporotnic Hub", totalGames="Games in catalog", authState="Access status",
         accessPublic="PUBLIC / TEST", accessGranted="Key activated", accessNeed="Awaiting key",
         patches="PATCHES", expandedHint="Click a release to view its updates",
-        releaseBuild="LAUNCHER BUILD: v0.2.23 (TEST)",
+        releaseBuild="LAUNCHER BUILD: v0.2.24 (TEST)",
         themeHeading="COLOR THEME", themeHint="Themes apply instantly. Saving needs executor file access.",
         themeForest="FOREST", themeOcean="NIGHT OCEAN", themeEmber="SUNSET", themeViolet="VIOLET", themeActive="ACTIVE",
          gateSubtitle="An access key is required to continue", gateIdle="Enter your key to continue.",
@@ -265,6 +304,7 @@ local recentTemporaryPath = "PaporotnicHub/recent-temporary.json"
 local supportsSessionFiles = type(readfile)=="function" and type(writefile)=="function"
 local rememberMe = false -- OFF by default; never save a key before explicit opt-in.
 local themeName = "forest"
+local lastLaunchedGameId = nil
 do
     if type(readfile)=="function" then
         local success, body = pcall(readfile, settingsPath)
@@ -274,6 +314,9 @@ do
                 if type(saved.theme)=="string" and themes[saved.theme] then themeName=saved.theme end
                 if saved.language=="ru" or saved.language=="en" then lang=saved.language end
                 if saved.rememberMe == true and supportsSessionFiles then rememberMe=true end
+                if type(saved.recentGameId)=="string" and #saved.recentGameId<100 then
+                    lastLaunchedGameId=saved.recentGameId
+                end
             end
         end
     end
@@ -288,7 +331,7 @@ local function savePreferences()
     if type(writefile)~="function" then return false end
     ensureDataFolder()
     local ok = pcall(writefile, settingsPath,
-        HttpService:JSONEncode({theme=themeName, language=lang, rememberMe=rememberMe}))
+        HttpService:JSONEncode({theme=themeName, language=lang, rememberMe=rememberMe, recentGameId=lastLaunchedGameId}))
     return ok
 end
 
@@ -374,6 +417,13 @@ local authStatusLabel, authSubmitButton, authInput
 local recentForgetButton
 local screen, root, content, statusLabel, titleLabel, footerLabel
 local switchKeyButton -- forward declaration for language changes in Settings
+local sidebarButtons = {}
+local sidebarAccessText, topVerifyText
+local function navigateTo(page, category)
+    selectedTab=page
+    if category then scriptCategory=category end
+    if type(render)=="function" then render() end
+end
 
 local function connect(signal, cb)
     local c = signal:Connect(cb)
@@ -620,7 +670,13 @@ local function launch(row)
             if launchEpoch ~= sessionEpoch or not authenticated then return end
             local launched,err=pcall(fn)
             if not alive or launchEpoch ~= sessionEpoch then return end
-            if launched then info(T("loaded")); screen.Enabled=false else info(T("loadFail")..tostring(err),true) end
+            if launched then
+                if type(row.id)=="string" then
+                    lastLaunchedGameId=row.id
+                    savePreferences()
+                end
+                info(T("loaded")); screen.Enabled=false
+            else info(T("loadFail")..tostring(err),true) end
         end)
     end)
 end
@@ -708,61 +764,156 @@ function render() end
 
 local function renderHome()
     clearPage()
+    -- All game names/icons are sourced from the real GitHub catalog.  Never
+    -- populate a dashboard with made-up modules, server latency or fake users.
     local sc=create("ScrollingFrame",{
-        Size=UDim2.new(1,0,1,0), BackgroundTransparency=1, BorderSizePixel=0, ScrollBarThickness=4,
-        AutomaticCanvasSize=Enum.AutomaticSize.Y, CanvasSize=UDim2.new(0,0,0,0), ScrollingDirection=Enum.ScrollingDirection.Y
+        Size=UDim2.new(1,0,1,0), BackgroundTransparency=1, BorderSizePixel=0,
+        ScrollBarThickness=4, ScrollBarImageColor3=palette.highlight,
+        AutomaticCanvasSize=Enum.AutomaticSize.Y, CanvasSize=UDim2.new(0,0,0,0),
+        ScrollingDirection=Enum.ScrollingDirection.Y
     },content)
     stack(sc,12)
 
-    local hero=card(sc,130)
-    local welcome=txt(hero,T("welcome"),28,palette.text,38)
-    welcome.Font=Enum.Font.GothamBold
-    welcome.Position=UDim2.fromOffset(0,0)
-    local sub=txt(hero,T("heroSub"),14,palette.muted,36)
-    sub.Position=UDim2.fromOffset(0,42)
-    local stats=create("Frame",{Position=UDim2.fromOffset(0,82), Size=UDim2.new(1,0,0,30), BackgroundTransparency=1}, hero)
-    txt(stats, T("totalGames")..": "..tostring(#(catalog.games or {})), 13, palette.highlight, 24).Position = UDim2.fromOffset(0,0)
-    local access = authMode == "public" and T("accessPublic") or (authenticated and T("accessGranted") or T("accessNeed"))
-    local accessLbl = txt(stats, T("authState")..": "..access, 13, authenticated and palette.highlight or palette.muted, 24)
-    accessLbl.Position = UDim2.new(0.48,0,0,0)
+    local function makeLabel(parent, text, fontSize, tint, x, y, w, h, bold)
+        local l=txt(parent,text,fontSize,tint,h)
+        l.Position=UDim2.new(0,x,0,y)
+        l.Size=UDim2.new(1,w,0,h)
+        l.TextXAlignment=Enum.TextXAlignment.Left
+        if bold then l.Font=Enum.Font.GothamBold end
+        return l
+    end
+    local function sectionHeader(parent,text)
+        local bar=create("Frame",{Size=UDim2.new(1,-9,0,29),BackgroundTransparency=1},parent)
+        makeLabel(bar,text,15,palette.text,3,0,-6,28,true)
+        return bar
+    end
+    local catalogGames=catalog.games or {}
+    local featured=nil
+    for _,item in ipairs(catalogGames) do
+        if type(item)=="table" and item.enabled~=false and isSupported(item) then featured=item; break end
+    end
+    if not featured then
+        for _,item in ipairs(catalogGames) do
+            if type(item)=="table" and item.enabled~=false then featured=item; break end
+        end
+    end
 
-    -- Key entry happens exclusively in the small AUTH gate before this page
-    -- becomes visible. No second activation box in Home.
+    -- Upper two columns: featured game and truthful account/server details.
+    local upper=create("Frame",{Size=UDim2.new(1,-10,0,251),BackgroundTransparency=1},sc)
+    local left=card(upper,251)
+    left.Size=UDim2.new(0.655,-6,1,0)
+    local right=create("Frame",{Position=UDim2.new(0.655,6,0,0),Size=UDim2.new(0.345,-6,1,0),BackgroundTransparency=1},upper)
+    if featured then
+        local heroArt=create("ImageLabel",{
+            Name="FeaturedGameThumbnail",Position=UDim2.new(0.48,0,0,-14),
+            Size=UDim2.new(0.52,16,1,28),BorderSizePixel=0,
+            ScaleType=Enum.ScaleType.Crop,BackgroundTransparency=1,
+            ImageTransparency=0.48,
+            Image=(type(featured.universeId)=="number") and
+                ("rbxthumb://type=GameIcon&id="..tostring(featured.universeId).."&w=420&h=420") or ""
+        },left)
+        corner(heroArt,12)
+        create("UIGradient",{Transparency=NumberSequence.new({
+            NumberSequenceKeypoint.new(0,1),
+            NumberSequenceKeypoint.new(0.6,0.32),
+            NumberSequenceKeypoint.new(1,0.12)
+        })},heroArt)
+    end
+    local eyebrow=makeLabel(left,T("dashboardFeatured"),10,palette.highlight,4,1,-14,21,true)
+    local heroTitle=makeLabel(left,featured and (featured.title or "Module") or T("dashboardWelcome"),
+        24,palette.text,4,36,-18,57,true)
+    heroTitle.TextYAlignment=Enum.TextYAlignment.Top
+    heroTitle.TextWrapped=true
+    local detail=featured and tostring(featured.description or "") or T("dashboardNoModule")
+    local description=makeLabel(left,detail,12,palette.muted,4,102,-25,52,false)
+    description.TextYAlignment=Enum.TextYAlignment.Top
+    local featureState=featured and (isSupported(featured) and T("dashboardCurrent") or T("dashboardOther")) or "—"
+    local featureVersion=featured and (" • "..tostring(featured.version or "")) or ""
+    makeLabel(left,featureState..featureVersion,11,palette.highlight,4,158,-12,22,true)
+    local launchBtn=button(left,featured and T("dashboardLaunch") or T("dashboardBrowse"),188,38,function()
+        if featured then launch(featured) else navigateTo("games","games") end
+    end,true)
+    launchBtn.Position=UDim2.fromOffset(4,194)
+    local browse=button(left,T("dashboardBrowse"),136,38,function() navigateTo("games","games") end,false)
+    browse.Position=UDim2.fromOffset(201,194)
 
-    local infoRow=create("Frame",{Size=UDim2.new(1,-10,0,150), BackgroundTransparency=1}, sc)
-    local versionCard=card(infoRow,150)
-    versionCard.Size = UDim2.new(0.5,-6,1,0)
-    local priceCard=card(infoRow,150)
-    priceCard.Position = UDim2.new(0.5,6,0,0)
-    priceCard.Size = UDim2.new(0.5,-6,1,0)
+    local accessCard=card(right,142)
+    accessCard.Size=UDim2.new(1,0,0,142)
+    local accessTitle=makeLabel(accessCard,T("dashboardAccess"),13,palette.highlight,0,0,0,21,true)
+    local accessType=(approvedKeyKind=="temporary" and T("dashboardTemporary") or T("dashboardLifetime"))
+    makeLabel(accessCard,T("dashboardAccessStatus")..":  "..T("dashboardVerified"),11,palette.text,0,31,-2,23,false)
+    makeLabel(accessCard,T("dashboardAccessType")..":  "..accessType,11,palette.text,0,57,-2,24,false)
+    makeLabel(accessCard,T("dashboardRemember")..":  "..(rememberMe and T("dashboardOn") or T("dashboardOff")),
+        11,palette.muted,0,87,-2,23,false)
+    local serverCard=card(right,96)
+    serverCard.Size=UDim2.new(1,0,0,96)
+    serverCard.Position=UDim2.fromOffset(0,155)
+    makeLabel(serverCard,T("dashboardServer"),12,palette.highlight,0,-2,-1,20,true)
+    makeLabel(serverCard,T("dashboardServerChecked"),11,palette.text,0,24,-2,24,false)
+    makeLabel(serverCard,T("dashboardServerNote"),10,palette.muted,0,49,-2,34,false)
 
-    txt(versionCard,T("status"),11,palette.muted,18).Position=UDim2.fromOffset(0,0)
-    local l=txt(versionCard,catalog.latestVersion or catalog.version or "—",20,palette.highlight,45)
-    l.Position=UDim2.fromOffset(0,18)
-    l.Font=Enum.Font.GothamBold
-    local ann=txt(versionCard,T("news")..": "..(catalog.announcement or "—"),12,palette.text,50)
-    ann.Position=UDim2.fromOffset(0,78)
-    ann.TextYAlignment=Enum.TextYAlignment.Top
+    -- Recent games: show an actual previously launched catalog module, or
+    -- an honest empty state. This last launched game ID is locally cached.
+    local recentHeading=sectionHeader(sc,T("dashboardRecent"))
+    local recentRow=create("Frame",{Size=UDim2.new(1,-10,0,100),BackgroundTransparency=1},sc)
+    local recent=nil
+    for _,item in ipairs(catalogGames) do
+        if type(item)=="table" and type(item.id)=="string" and item.id==lastLaunchedGameId then
+            recent=item;break
+        end
+    end
+    local recentCard=card(recentRow,100)
+    recentCard.Size=UDim2.new(1,0,1,0)
+    if recent then
+        local recentThumb=create("ImageLabel",{
+            Position=UDim2.fromOffset(0,0),Size=UDim2.fromOffset(72,72),
+            Image=(type(recent.universeId)=="number") and
+                ("rbxthumb://type=GameIcon&id="..tostring(recent.universeId).."&w=150&h=150") or "",
+            BackgroundColor3=palette.card,BorderSizePixel=0
+        },recentCard)
+        corner(recentThumb,9)
+        local recentName=makeLabel(recentCard,recent.title or "Game",15,palette.text,86,2,-250,29,true)
+        makeLabel(recentCard,tostring(recent.description or ""),11,palette.muted,86,32,-258,33,false)
+        local recentLaunch=button(recentCard,T("start"),130,35,function() launch(recent) end,isSupported(recent))
+        recentLaunch.Position=UDim2.new(1,-132,0,18)
+    else
+        makeLabel(recentCard,T("dashboardNoRecent"),13,palette.muted,3,10,-30,27,false)
+        makeLabel(recentCard,T("dashboardLead"),11,palette.muted,3,43,-30,24,false)
+        local jump=button(recentCard,T("dashboardBrowse"),145,33,function() navigateTo("games","games") end,false)
+        jump.Position=UDim2.new(1,-149,0,17)
+    end
 
-    txt(priceCard,T("price"),11,palette.muted,18).Position=UDim2.fromOffset(0,0)
-    local price=txt(priceCard,catalog.lifetimePrice or "TBA",24,palette.text,45)
-    price.Position=UDim2.fromOffset(0,18)
-    price.Font=Enum.Font.GothamBold
-    local note=txt(priceCard,T("note"),12,palette.muted,52)
-    note.Position=UDim2.fromOffset(0,82)
-    note.TextYAlignment=Enum.TextYAlignment.Top
+    sectionHeader(sc,T("dashboardUniversal"))
+    local quick=card(sc,119)
+    local tile=create("Frame",{Position=UDim2.fromOffset(2,9),Size=UDim2.fromOffset(80,78),
+        BackgroundColor3=palette.card,BorderSizePixel=0},quick)
+    corner(tile,12)
+    local iy=makeLabel(tile,"IY",28,palette.highlight,0,20,0,36,true)
+    iy.TextXAlignment=Enum.TextXAlignment.Center
+    makeLabel(quick,"Infinite Yield",17,palette.text,103,12,-257,27,true)
+    makeLabel(quick,T("dashboardIYInfo"),11,palette.muted,103,43,-255,39,false)
+    local universalBtn=button(quick,T("dashboardOpen"),180,39,function()
+        navigateTo("games","universal")
+    end,true)
+    universalBtn.Position=UDim2.new(1,-182,0,24)
 
-    local rel=card(sc,120)
-    txt(rel,T("releaseTitle"),12,palette.muted,20).Position=UDim2.fromOffset(0,0)
-    local latest = (catalog.releases and catalog.releases[1]) or {title = catalog.version or "v0.2.0", body = catalog.announcement or "—"}
-    local rt = txt(rel, tostring(latest.title or "—"), 20, palette.highlight, 28)
-    rt.Font = Enum.Font.GothamBold
-    rt.Position = UDim2.fromOffset(0,24)
-    local rb = txt(rel, tostring(latest.body or "—"), 13, palette.text, 56)
-    rb.Position = UDim2.fromOffset(0,58)
-    rb.TextYAlignment = Enum.TextYAlignment.Top
-
-    if not catalogOk then txt(sc,T("offline"),11,palette.alert,22) end
+    sectionHeader(sc,T("dashboardUpdates"))
+    local latest=card(sc,139)
+    local updates={
+        {"v0.2.24",lang=="ru" and "Новый Home Dashboard" or "New Home Dashboard"},
+        {"v0.2.23",lang=="ru" and "Раздел Universal Scripts" or "Universal Scripts section"},
+        {"v0.2.22",lang=="ru" and "Подстановка временного ключа" or "Temporary key prefill"}
+    }
+    for i,update in ipairs(updates) do
+        makeLabel(latest,update[1],12,palette.highlight,4,(i-1)*36,-210,27,true)
+        makeLabel(latest,update[2],12,palette.text,90,(i-1)*36,-270,27,false)
+    end
+    local all=button(latest,T("releases"),144,35,function() navigateTo("releases") end,false)
+    all.Position=UDim2.new(1,-151,0,37)
+    if not catalogOk then
+        local offlineLine=txt(sc,T("offline"),11,palette.alert,24)
+        offlineLine.Size=UDim2.new(1,-10,0,24)
+    end
 end
 
 local function renderGameScripts(panel)
@@ -1021,7 +1172,7 @@ local function renderSettings()
         local isSelected = (name==themeName)
         local label = T("theme"..name:sub(1,1):upper()..name:sub(2))
         local tile=create("TextButton",{
-            Position=UDim2.fromOffset((index-1)*228,153), Size=UDim2.fromOffset(214,74),
+            Position=UDim2.fromOffset((index-1)*204,153), Size=UDim2.fromOffset(190,74),
             Text="",BorderSizePixel=0,AutoButtonColor=true,
             BackgroundColor3=palette.panel
         },content)
@@ -1103,7 +1254,7 @@ local function renderSettings()
     end
     local rememberDesc=txt(content,T("rememberHint"),12,palette.muted,28)
     rememberDesc.Position=UDim2.fromOffset(278,318)
-    rememberDesc.Size=UDim2.fromOffset(630,28)
+    rememberDesc.Size=UDim2.new(1,-280,0,28)
     local rememberWarning=txt(content,T("rememberWarning"),11,palette.alert,38)
     rememberWarning.Position=UDim2.fromOffset(0,363)
     rememberWarning.Size=UDim2.new(1,-10,0,38)
@@ -1125,6 +1276,21 @@ end
 
 function render()
     if not alive or not content then return end
+    -- Repaint navigation selection and language on every page change.
+    for _,entry in ipairs(sidebarButtons) do
+        local nav=entry.button
+        if nav and nav.Parent then
+            local selected=entry.page==selectedTab and
+                (entry.page~="games" or entry.category==scriptCategory)
+            nav.BackgroundColor3=selected and palette.highlight or palette.card
+            nav.TextColor3=selected and palette.background or palette.text
+            nav.Text=entry.prefix..T(entry.labelKey)
+        end
+    end
+    if sidebarAccessText and sidebarAccessText.Parent then
+        sidebarAccessText.Text=authenticated and
+            ((approvedKeyKind=="temporary" and T("dashboardTemporary") or T("dashboardLifetime")).."  •  "..T("dashboardVerified")) or "—"
+    end
     if selectedTab=="games" then renderGames()
     elseif selectedTab=="releases" then renderReleases()
     elseif selectedTab=="settings" then renderSettings()
@@ -1134,7 +1300,7 @@ end
 screen=create("ScreenGui",{Name="PaporotnicUniversalLauncher",ResetOnSpawn=false,IgnoreGuiInset=true,ZIndexBehavior=Enum.ZIndexBehavior.Sibling,DisplayOrder=1000},playerGui)
 -- A hidden CanvasGroup alone can sometimes leave children interactive.
 -- Keep the full launcher genuinely invisible until the API confirms a key.
-root=create("CanvasGroup",{Position=UDim2.new(.5,-490,.5,-360),Size=UDim2.fromOffset(980,720),Active=true,Visible=false,BackgroundColor3=palette.background,BorderSizePixel=0,ClipsDescendants=true,GroupTransparency=1},screen)
+root=create("CanvasGroup",{Position=UDim2.new(.5,-550,.5,-360),Size=UDim2.fromOffset(1100,720),Active=true,Visible=false,BackgroundColor3=palette.background,BorderSizePixel=0,ClipsDescendants=true,GroupTransparency=1},screen)
 corner(root,16)
 -- CanvasGroup.GroupTransparency does not reliably hide a UIStroke attached to
 -- the group itself. Keep the window border fully hidden during the splash.
@@ -1148,7 +1314,10 @@ corner(top,16)
 titleLabel=txt(top,T("title"),22,palette.highlight,56)
 titleLabel.Font=Enum.Font.GothamBold
 titleLabel.Position=UDim2.fromOffset(18,2)
-titleLabel.Size=UDim2.new(1,-260,0,56)
+titleLabel.Size=UDim2.new(1,-445,0,56)
+local buildBadge=txt(top,"v0.2.24  •  VERIFIED ACCESS",11,palette.muted,24)
+buildBadge.Position=UDim2.new(1,-453,0,17)
+buildBadge.Size=UDim2.fromOffset(219,24)
 -- Always visible after authorization: intended for testers AND regular users.
 switchKeyButton=button(top,T("switchKey"),124,36,function()
     if type(returnToAuthGate)=="function" then returnToAuthGate() end
@@ -1162,22 +1331,66 @@ local settings=button(top,"⚙",36,36,function() selectedTab="settings"; render(
 settings.TextSize=20
 settings.Position=UDim2.new(1,-42,0,12)
 
-local tabWrap=create("Frame",{Position=UDim2.fromOffset(18,74),Size=UDim2.new(1,-36,0,42),BackgroundTransparency=1},root)
-local homeButton=button(tabWrap,T("home"),150,38,function() selectedTab="home"; render() end)
-local gamesButton=button(tabWrap,T("games"),150,38,function() selectedTab="games"; render() end)
-gamesButton.Position=UDim2.fromOffset(160,0)
-local releasesButton=button(tabWrap,T("releases"),150,38,function() selectedTab="releases"; render() end)
-releasesButton.Position=UDim2.fromOffset(320,0)
-
-content=create("Frame",{Position=UDim2.fromOffset(24,126),Size=UDim2.new(1,-48,1,-184),BackgroundTransparency=1},root)
-statusLabel=txt(root,"",12,palette.highlight,34)
-statusLabel.Position=UDim2.new(0,24,1,-52)
-statusLabel.Size=UDim2.new(1,-48,0,34)
-statusLabel.TextXAlignment = Enum.TextXAlignment.Center
-
-footerLabel=txt(root,T("footer"),12,palette.muted,18,Enum.TextXAlignment.Center)
-footerLabel.Position = UDim2.new(0,24,1,-24)
-footerLabel.Size = UDim2.new(1,-48,0,18)
+-- Persistent vertical navigation inspired by the Home Dashboard mockup.
+-- Games and Universal both map to the existing, tested scripts page.
+local sidebar=create("Frame",{
+    Name="DashboardSidebar",Position=UDim2.fromOffset(12,75),
+    Size=UDim2.new(0,184,1,-135),BackgroundColor3=palette.panel,
+    BorderSizePixel=0,BackgroundTransparency=0.05
+},root)
+corner(sidebar,12)
+create("UIStroke",{Color=palette.border,Thickness=1,Transparency=0.45},sidebar)
+local sidebarHeading=txt(sidebar,T("dashboardNavigation"),10,palette.muted,28)
+sidebarHeading.Position=UDim2.fromOffset(14,13)
+sidebarHeading.Size=UDim2.fromOffset(160,28)
+sidebarHeading.Font=Enum.Font.GothamBold
+local navOptions={
+    {"home",nil,"⌂  ","home"},
+    {"games","games","▣  ","dashboardShortGames"},
+    {"games","universal","◇  ","dashboardShortUniversal"},
+    {"releases",nil,"▤  ","releases"},
+    {"settings",nil,"⚙  ","settings"}
+}
+for i,item in ipairs(navOptions) do
+    local page,category,icon,labelKey=item[1],item[2],item[3],item[4]
+    local nav=button(sidebar,icon..T(labelKey),160,43,function()
+        navigateTo(page,category)
+    end,false)
+    nav.TextXAlignment=Enum.TextXAlignment.Left
+    nav.TextSize=12
+    nav.Position=UDim2.fromOffset(12,52+(i-1)*51)
+    nav.Name="Sidebar_"..(category or page)
+    table.insert(sidebarButtons,{button=nav,page=page,category=category,prefix=icon,labelKey=labelKey})
+end
+local accessSection=create("Frame",{
+    Position=UDim2.new(0,11,1,-137),Size=UDim2.new(1,-22,0,126),
+    BackgroundColor3=palette.card,BorderSizePixel=0
+},sidebar)
+corner(accessSection,10)
+local accessTitle=txt(accessSection,T("dashboardSideAccess"),11,palette.highlight,24)
+accessTitle.Font=Enum.Font.GothamBold
+accessTitle.Position=UDim2.fromOffset(11,9)
+accessTitle.Size=UDim2.new(1,-22,0,24)
+sidebarAccessText=txt(accessSection,"—",12,palette.text,26)
+sidebarAccessText.Position=UDim2.fromOffset(11,38)
+sidebarAccessText.Size=UDim2.new(1,-22,0,26)
+local sideSwitch=button(accessSection,T("switchKey"),139,34,function()
+    if type(returnToAuthGate)=="function" then returnToAuthGate() end
+end,false)
+sideSwitch.Position=UDim2.fromOffset(11,77)
+sideSwitch.TextSize=11
+-- Existing top-bar Switch Key remains reachable even on smaller displays.
+content=create("Frame",{
+    Name="PageContent",Position=UDim2.fromOffset(212,76),
+    Size=UDim2.new(1,-234,1,-128), BackgroundTransparency=1
+},root)
+statusLabel=txt(root,"",12,palette.highlight,25)
+statusLabel.Position=UDim2.new(0,212,1,-50)
+statusLabel.Size=UDim2.new(1,-235,0,24)
+statusLabel.TextXAlignment=Enum.TextXAlignment.Center
+footerLabel=txt(root,T("footer"),10,palette.muted,19,Enum.TextXAlignment.Center)
+footerLabel.Position=UDim2.new(0,212,1,-23)
+footerLabel.Size=UDim2.new(1,-235,0,19)
 
 local dragging,dragStart,startPos=false,nil,nil
 connect(top.InputBegan,function(input)
@@ -1643,4 +1856,4 @@ local function playLaunchIntro()
 end
 
 task.spawn(playLaunchIntro)
-print("[Paporotnic Universal Launcher] v0.2.23 | PlaceId="..tostring(game.PlaceId))
+print("[Paporotnic Universal Launcher] v0.2.24 | PlaceId="..tostring(game.PlaceId))
