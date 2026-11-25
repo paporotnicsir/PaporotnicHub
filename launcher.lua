@@ -1,4 +1,4 @@
--- PAPOROTNIC HUB | universal launcher v0.2.35
+-- PAPOROTNIC HUB | universal launcher v0.2.36
 -- 3-second loading gate, key-only entry, and quiet accent-glow interface.
 -- Based on the user's v0.2.14 launcher; auth API and game module flow preserved.
 
@@ -60,7 +60,7 @@ local function gameIconContent(item)
 end
 
 local FALLBACK = {
-    version = "0.2.35 (offline catalog)",
+    version = "0.2.36 (offline catalog)",
     latestVersion = "Paporotnic Hub Core v0.2.8",
     lifetimePrice = "$ ?? / TBA",
     announcement = "Welcome, LIL Paporotnics! The universal hub is online.",
@@ -75,6 +75,9 @@ local FALLBACK = {
             id = "release-020", version = "v0.2.0", name = "Launcher redesign",
             summary = "Larger interface, fern background and a dedicated Releases page.",
             updates = {
+                {version = "v0.2.36", title = "Avatar backplate isolation hotfix",
+                  body = "WHITE and THEME now affect only the avatar background; regular controls keep their theme colors.",
+                  bodyRu = "WHITE/THEME меняют только фон аватарки, без побеления кнопок и HEX-полей."},
                 {version = "v0.2.35", title = "Panel-linked dividers · avatar backplate",
                   body = "Header and sidebar separators now follow their surface colors; avatar background can be White or Theme.",
                   bodyRu = "Разделители берут цвет верхней и боковой панелей; фон аватарки переключается между белым и цветом темы."},
@@ -259,7 +262,7 @@ local strings = {
         releaseSub="Новости и изменения Paporotnic Hub", totalGames="Игр в каталоге", authState="Статус доступа",
         accessPublic="PUBLIC / TEST", accessGranted="Ключ активирован", accessNeed="Ожидает ключ",
         patches="ПОДОБНОВЛЕНИЙ", expandedHint="Нажми на релиз, чтобы увидеть изменения",
-        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.35",
+        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.36",
         themeHeading="ТЕМА ОФОРМЛЕНИЯ", themeHint="Изменения применяются сразу. Сохранение работает, если исполнитель поддерживает запись файлов.",
         themeForest="ЛЕСНАЯ", themeOcean="НОЧНОЙ ОКЕАН", themeEmber="ЗАКАТ", themeViolet="ФИОЛЕТОВАЯ", themeActive="ВЫБРАНО",
          gateSubtitle="Для доступа к хабу требуется ключ", gateIdle="Введите ключ для продолжения.",
@@ -326,7 +329,7 @@ local strings = {
         releaseSub="News and changes for Paporotnic Hub", totalGames="Games in catalog", authState="Access status",
         accessPublic="PUBLIC / TEST", accessGranted="Key activated", accessNeed="Awaiting key",
         patches="PATCHES", expandedHint="Click a release to view its updates",
-        releaseBuild="LAUNCHER BUILD: v0.2.35",
+        releaseBuild="LAUNCHER BUILD: v0.2.36",
         themeHeading="COLOR THEME", themeHint="Themes apply instantly. Saving needs executor file access.",
         themeForest="FOREST", themeOcean="NIGHT OCEAN", themeEmber="SUNSET", themeViolet="VIOLET", themeActive="ACTIVE",
          gateSubtitle="An access key is required to continue", gateIdle="Enter your key to continue.",
@@ -479,10 +482,26 @@ local function syncSurfacePalette()
     palette.headerActions=actionColor or palette.panel
     palette.headerDividerColor=separatorShade(palette.headerSurface)
     palette.sidebarDividerColor=separatorShade(palette.sidebarSurface)
-    palette.avatarBackplate=avatarBackplateMode=="white" and Color3.fromRGB(255,255,255) or palette.card
 end
 syncSurfacePalette()
+-- v0.2.36: avatar backplate is NOT a palette entry.  When THEME made it
+-- equal to palette.card, the old automatic matching accidentally bound many
+-- ordinary card-colored inputs/buttons to the avatar. WHITE then painted them
+-- all white.  The image is now updated only via its own reference.
+local avatarImage = nil
+local function avatarBackplateColor()
+    return avatarBackplateMode=="white" and Color3.fromRGB(255,255,255) or palette.card
+end
+local function updateAvatarBackplate()
+    if avatarImage and avatarImage.Parent then
+        avatarImage.BackgroundColor3=avatarBackplateColor()
+        avatarImage.BackgroundTransparency=0
+    end
+end
 local themeBindings = setmetatable({}, {__mode="k"})
+-- Only canonical theme colors may be inferred by equality. Derived surface
+-- aliases (header, sidebar, etc.) must use explicit bindings to avoid collisions.
+local inferredThemeKeys = {"background","panel","card","highlight","text","muted","border","alert","fern","fern2","fernShadow"}
 local surfaceFrames = {} -- live panel Frame references: no page reconstruction needed
 local chromeRefs = {headerBadges={}, headerActions={}}
 local quickActionRefs = {} -- independent of themeBindings' automatic matching
@@ -611,8 +630,8 @@ local function create(class, props, parent)
         -- Remember which colors belong to the active theme so we can recolor
         -- the whole GUI without destroying it or restarting the intro.
         if typeof(v)=="Color3" then
-            for paletteKey,currentColor in pairs(palette) do
-                if v==currentColor then
+            for _,paletteKey in ipairs(inferredThemeKeys) do
+                if v==palette[paletteKey] then
                     tracked = tracked or {}
                     tracked[k] = paletteKey
                     break
@@ -718,6 +737,8 @@ local function repaintPalette(skipRender)
             nav.TextColor3=selected and palette.background or palette.text
         end
     end
+    -- Theme switches may change palette.card; update only the avatar image.
+    updateAvatarBackplate()
     if not skipRender then
         task.defer(function() if alive and type(render)=="function" then render() end end)
     end
@@ -797,8 +818,9 @@ end
 local function setAvatarBackplate(mode)
     if mode~="white" and mode~="theme" then return false end
     avatarBackplateMode=mode
-    palette.avatarBackplate=mode=="white" and Color3.fromRGB(255,255,255) or palette.card
-    repaintPalette(true) -- live update; do not jump to top of Settings
+    -- NEVER repaint every GUI control for an avatar-only setting.
+    -- Updating this one ImageLabel also preserves Settings scroll position.
+    updateAvatarBackplate()
     savePreferences()
     return true
 end
@@ -2012,8 +2034,8 @@ local function renderSettings()
         "0% is solid, 75% lets the wallpaper through; controls stay opaque."),11,palette.muted,31)
     opacityHint.Position=UDim2.fromOffset(0,1145)
 
-    -- Avatar image backplate: White is the default; Theme follows palette.card.
-    -- These controls update the ImageLabel immediately and preserve scroll.
+    -- Avatar backplate belongs to one ImageLabel, NOT the global palette.
+    -- These controls update it directly and preserve Settings scroll.
     local avatarHeading=txt(page,L("ФОН АВАТАРКИ", "AVATAR BACKPLATE"),14,palette.text,24)
     avatarHeading.Font=Enum.Font.GothamBold
     avatarHeading.Position=UDim2.fromOffset(0,1187)
@@ -2226,7 +2248,7 @@ local function headerChip(textValue,x,w)
 end
 local stateChip,stateText=headerChip("●  ACCESS VERIFIED",326,170)
 local apiChip,apiText=headerChip("KEY SYSTEM",510,139)
-local buildChip,buildText=headerChip("HUB  v0.2.35",663,150)
+local buildChip,buildText=headerChip("HUB  v0.2.36",663,150)
 
 local profile=create("Frame",{Position=UDim2.new(1,-333,0,9),Size=UDim2.fromOffset(189,58),
     BackgroundColor3=palette.headerActions,BorderSizePixel=0},top)
@@ -2235,8 +2257,11 @@ themeBindings[profile]={BackgroundColor3="headerActions"}
 table.insert(chromeRefs.headerActions,profile)
 local avatar=create("ImageLabel",{Position=UDim2.fromOffset(8,6),Size=UDim2.fromOffset(46,46),
     Image="rbxthumb://type=AvatarHeadShot&id="..tostring(localPlayer.UserId).."&w=150&h=150",
-    BackgroundColor3=palette.avatarBackplate,BorderSizePixel=0},profile)
-themeBindings[avatar]={BackgroundColor3="avatarBackplate"}
+    BackgroundColor3=avatarBackplateColor(),BorderSizePixel=0},profile)
+-- No themeBindings entry: the dedicated updater owns this one background.
+avatarImage=avatar
+themeBindings[avatar]=nil
+updateAvatarBackplate()
 corner(avatar,23)
 local avatarOutline=create("UIStroke",{Color=palette.highlight,Thickness=1.8,Transparency=0.30},avatar)
 themeBindings[avatarOutline]={Color="highlight"}
@@ -2425,10 +2450,10 @@ renderRightRail=function()
     local updates=rrPanel(485,150)
     rrLabel(updates,L("Обновления","Latest Updates"),15,palette.text,13,8,250,28,true)
     local recent={
+        {"v0.2.36",L("Исправление фона аватарки","Avatar Backplate Fix")},
         {"v0.2.35",L("Разделители и аватарка","Dividers & Avatar")},
         {"v0.2.34",L("Цвета кнопок и линий","Chrome Colors")},
         {"v0.2.33",L("Прозрачность боковины","Sidebar Opacity")},
-        {"v0.2.32",L("Исправления цветов и карточек","Panel & Card Fixes")},
     }
     for i,r in ipairs(recent) do
         local y=40+(i-1)*26
