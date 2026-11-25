@@ -1,4 +1,4 @@
--- PAPOROTNIC HUB | universal launcher v0.2.33
+-- PAPOROTNIC HUB | universal launcher v0.2.34
 -- 3-second loading gate, key-only entry, and quiet accent-glow interface.
 -- Based on the user's v0.2.14 launcher; auth API and game module flow preserved.
 
@@ -60,7 +60,7 @@ local function gameIconContent(item)
 end
 
 local FALLBACK = {
-    version = "0.2.33 (offline catalog)",
+    version = "0.2.34 (offline catalog)",
     latestVersion = "Paporotnic Hub Core v0.2.8",
     lifetimePrice = "$ ?? / TBA",
     announcement = "Welcome, LIL Paporotnics! The universal hub is online.",
@@ -75,6 +75,9 @@ local FALLBACK = {
             id = "release-020", version = "v0.2.0", name = "Launcher redesign",
             summary = "Larger interface, fern background and a dedicated Releases page.",
             updates = {
+                {version = "v0.2.34", title = "Header control colors · themed borders",
+                  body = "Independent badge and profile/button colors, live accent-colored shell lines and borderless quick actions.",
+                  bodyRu = "Отдельные цвета плашек и кнопок сверху, линии под цвет акцента, блок Switch Key без подложки."},
                 {version = "v0.2.33", title = "Sidebar opacity · clean card edges",
                   body = "Optional translucent sidebar, live theme colors for quick actions and avatar ring, 0.2.31 art alignment restored and highlighted outlines removed.",
                   bodyRu = "Полупрозрачная боковая панель, корректные цвета кнопок и аватара, оформление картинок v0.2.31 без светящихся рамок."},
@@ -253,7 +256,7 @@ local strings = {
         releaseSub="Новости и изменения Paporotnic Hub", totalGames="Игр в каталоге", authState="Статус доступа",
         accessPublic="PUBLIC / TEST", accessGranted="Ключ активирован", accessNeed="Ожидает ключ",
         patches="ПОДОБНОВЛЕНИЙ", expandedHint="Нажми на релиз, чтобы увидеть изменения",
-        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.33",
+        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.34",
         themeHeading="ТЕМА ОФОРМЛЕНИЯ", themeHint="Изменения применяются сразу. Сохранение работает, если исполнитель поддерживает запись файлов.",
         themeForest="ЛЕСНАЯ", themeOcean="НОЧНОЙ ОКЕАН", themeEmber="ЗАКАТ", themeViolet="ФИОЛЕТОВАЯ", themeActive="ВЫБРАНО",
          gateSubtitle="Для доступа к хабу требуется ключ", gateIdle="Введите ключ для продолжения.",
@@ -320,7 +323,7 @@ local strings = {
         releaseSub="News and changes for Paporotnic Hub", totalGames="Games in catalog", authState="Access status",
         accessPublic="PUBLIC / TEST", accessGranted="Key activated", accessNeed="Awaiting key",
         patches="PATCHES", expandedHint="Click a release to view its updates",
-        releaseBuild="LAUNCHER BUILD: v0.2.33",
+        releaseBuild="LAUNCHER BUILD: v0.2.34",
         themeHeading="COLOR THEME", themeHint="Themes apply instantly. Saving needs executor file access.",
         themeForest="FOREST", themeOcean="NIGHT OCEAN", themeEmber="SUNSET", themeViolet="VIOLET", themeActive="ACTIVE",
          gateSubtitle="An access key is required to continue", gateIdle="Enter your key to continue.",
@@ -407,6 +410,8 @@ local themeName = "forest"
 local customAccentHex = nil
 local headerSurfaceHex = nil
 local sidebarSurfaceHex = nil
+local headerBadgesHex = nil  -- ACCESS VERIFIED / KEY SYSTEM / HUB VERSION
+local headerActionsHex = nil -- profile, settings, minimize and close
 local sidebarOpacity = 0 -- 0 = solid, .75 = noticeably translucent
 local showFoliage = true
 local lastLaunchedGameId = nil
@@ -423,6 +428,10 @@ do
                 local sideHex=parseSurfaceHex(saved.sidebarSurfaceHex)
                 if topHex then headerSurfaceHex=topHex end
                 if sideHex then sidebarSurfaceHex=sideHex end
+                local badgeHex=parseSurfaceHex(saved.headerBadgesHex)
+                local actionHex=parseSurfaceHex(saved.headerActionsHex)
+                if badgeHex then headerBadgesHex=badgeHex end
+                if actionHex then headerActionsHex=actionHex end
                 if type(saved.sidebarOpacity)=="number" and saved.sidebarOpacity>=0 and saved.sidebarOpacity<=0.75 then
                     sidebarOpacity=saved.sidebarOpacity
                 end
@@ -445,12 +454,19 @@ end
 local function syncSurfacePalette()
     local _,topColor=parseSurfaceHex(headerSurfaceHex)
     local _,sideColor=parseSurfaceHex(sidebarSurfaceHex)
+    local _,badgeColor=parseSurfaceHex(headerBadgesHex)
+    local _,actionColor=parseSurfaceHex(headerActionsHex)
     palette.headerSurface=topColor or palette.background
     palette.sidebarSurface=sideColor or palette.background
+    -- With no override, each group follows the current theme's card/panel color.
+    palette.headerBadges=badgeColor or palette.panel
+    palette.headerActions=actionColor or palette.panel
 end
 syncSurfacePalette()
 local themeBindings = setmetatable({}, {__mode="k"})
 local surfaceFrames = {} -- live panel Frame references: no page reconstruction needed
+local chromeRefs = {headerBadges={}, headerActions={}}
+local quickActionRefs = {} -- independent of themeBindings' automatic matching
 local function ensureDataFolder()
     if type(makefolder)=="function" then pcall(makefolder,"PaporotnicHub") end
 end
@@ -460,6 +476,7 @@ local function savePreferences()
     local ok = pcall(writefile, settingsPath,
         HttpService:JSONEncode({theme=themeName, accentHex=customAccentHex,
             headerSurfaceHex=headerSurfaceHex, sidebarSurfaceHex=sidebarSurfaceHex,
+            headerBadgesHex=headerBadgesHex, headerActionsHex=headerActionsHex,
             sidebarOpacity=sidebarOpacity,
             showFoliage=showFoliage, language=lang, rememberMe=rememberMe,
             recentGameId=lastLaunchedGameId}))
@@ -655,6 +672,24 @@ local function repaintPalette(skipRender)
             end
         end
     end
+    -- Explicit update covers all persistent shell widgets and prevents
+    -- stale violet rectangles after switching theme or accent several times.
+    for _,panel in ipairs(chromeRefs.headerBadges) do
+        if panel.Parent then panel.BackgroundColor3=palette.headerBadges end
+    end
+    for _,panel in ipairs(chromeRefs.headerActions) do
+        if panel.Parent then panel.BackgroundColor3=palette.headerActions end
+    end
+    local sw=quickActionRefs.switch
+    local hide=quickActionRefs.hide
+    if sw and sw.Parent then
+        sw.BackgroundColor3=palette.highlight
+        sw.TextColor3=palette.background
+    end
+    if hide and hide.Parent then
+        hide.BackgroundColor3=palette.card
+        hide.TextColor3=palette.text
+    end
     for _,entry in ipairs(sidebarButtons) do
         local nav=entry.button
         if nav and nav.Parent then
@@ -696,12 +731,23 @@ local function resetCustomAccent()
     repaintPalette()
     savePreferences()
 end
+local function getSurfaceHex(section)
+    if section=="header" then return headerSurfaceHex end
+    if section=="sidebar" then return sidebarSurfaceHex end
+    if section=="badges" then return headerBadgesHex end
+    if section=="actions" then return headerActionsHex end
+    return nil
+end
 local function setSurfaceColor(section,input)
     local normalized,color=parseSurfaceHex(input)
-    if not normalized or (section~="header" and section~="sidebar") then return false end
-    if section=="header" then headerSurfaceHex=normalized else sidebarSurfaceHex=normalized end
+    if not normalized then return false end
+    if section=="header" then headerSurfaceHex=normalized
+    elseif section=="sidebar" then sidebarSurfaceHex=normalized
+    elseif section=="badges" then headerBadgesHex=normalized
+    elseif section=="actions" then headerActionsHex=normalized
+    else return false end
     syncSurfacePalette()
-    repaintPalette(true) -- update Color3 bindings immediately, leave Settings scroll intact
+    repaintPalette(true) -- live update without resetting the Settings scrollbar
     local panel=surfaceFrames[section]
     if panel and panel.Parent then panel.BackgroundColor3=color end
     savePreferences()
@@ -710,6 +756,8 @@ end
 local function resetSurfaceColor(section)
     if section=="header" then headerSurfaceHex=nil
     elseif section=="sidebar" then sidebarSurfaceHex=nil
+    elseif section=="badges" then headerBadgesHex=nil
+    elseif section=="actions" then headerActionsHex=nil
     else return end
     syncSurfacePalette()
     repaintPalette(true)
@@ -1714,7 +1762,7 @@ local function renderSettings()
         Name="ThemeEditorScroll",Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
         BorderSizePixel=0,ScrollBarThickness=4,ScrollBarImageColor3=palette.highlight,
         ScrollingDirection=Enum.ScrollingDirection.Y,
-        CanvasSize=UDim2.fromOffset(0,1310)
+        CanvasSize=UDim2.fromOffset(0,1630)
     },content)
     scroll.CanvasPosition=Vector2.new(0,restoreScrollY)
     connect(scroll:GetPropertyChangedSignal("CanvasPosition"),function()
@@ -1726,7 +1774,7 @@ local function renderSettings()
         end
     end)
     local page=create("Frame",{
-        Size=UDim2.new(1,-14,0,1298),BackgroundTransparency=1,BorderSizePixel=0
+        Size=UDim2.new(1,-14,0,1618),BackgroundTransparency=1,BorderSizePixel=0
     },scroll)
     local heading=txt(page,T("settings"),22,palette.text,38)
     heading.Font=Enum.Font.GothamBold
@@ -1830,7 +1878,7 @@ local function renderSettings()
         "Top bar and sidebar colors are independent of theme and accent."),12,palette.muted,25)
     sectionHint.Position=UDim2.fromOffset(0,462)
     local function drawPanelControl(section,y,ru,en)
-        local activeHex=section=="header" and headerSurfaceHex or sidebarSurfaceHex
+        local activeHex=getSurfaceHex(section)
         local optionBorders={}
         local heading=txt(page,L(ru,en),13,palette.text,25)
         heading.Font=Enum.Font.GothamBold
@@ -1874,7 +1922,7 @@ local function renderSettings()
         },page)
         corner(box,7)
         local function refreshControl()
-            activeHex=section=="header" and headerSurfaceHex or sidebarSurfaceHex
+            activeHex=getSurfaceHex(section)
             box.Text=activeHex or ""
             for _,option in ipairs(optionBorders) do
                 local selected=option.hex==activeHex
@@ -1902,14 +1950,16 @@ local function renderSettings()
     end
     drawPanelControl("header",496,"ВЕРХНЯЯ ПАНЕЛЬ","TOP BAR")
     drawPanelControl("sidebar",638,"БОКОВАЯ ПАНЕЛЬ","SIDEBAR")
-    local colorTip=txt(page,L("Доступны тёмные HEX-цвета: белый текст остаётся читаемым. Логотип не меняется.",
-        "Dark HEX colors only to preserve text contrast. The fern logo stays unchanged."),11,palette.muted,28)
-    colorTip.Position=UDim2.fromOffset(0,757)
+    drawPanelControl("badges",780,"ВЕРХНИЕ ПЛАШКИ","HEADER BADGES")
+    drawPanelControl("actions",922,"АККАУНТ И КНОПКИ","PROFILE & WINDOW BUTTONS")
+    local colorTip=txt(page,L("Выбери тёмный HEX для плашек/кнопок; 'КАК В ТЕМЕ' восстанавливает автоматический цвет.",
+        "Dark HEX overrides are optional; USE THEME restores automatic theme colors."),11,palette.muted,28)
+    colorTip.Position=UDim2.fromOffset(0,1045)
 
     -- Translucency applies only to the left Sidebar surface; Top Bar remains solid.
     local opacityHeading=txt(page,L("ПРОЗРАЧНОСТЬ БОКОВОЙ ПАНЕЛИ","SIDEBAR OPACITY"),14,palette.text,24)
     opacityHeading.Font=Enum.Font.GothamBold
-    opacityHeading.Position=UDim2.fromOffset(0,785)
+    opacityHeading.Position=UDim2.fromOffset(0,1073)
     local opacityOptions={0,0.2,0.4,0.6,0.75}
     local opacityChoices={}
     local function refreshOpacityColors()
@@ -1927,28 +1977,28 @@ local function renderSettings()
             end
         end,false)
         choice.Name="SidebarOpacity_"..tostring(i)
-        choice.Position=UDim2.fromOffset((i-1)*94,816)
+        choice.Position=UDim2.fromOffset((i-1)*94,1104)
         table.insert(opacityChoices,{value=value,button=choice})
     end
     refreshOpacityColors()
     local opacityHint=txt(page,L("0% — сплошной фон, 75% — полупрозрачный. Не влияет на кнопки.",
         "0% is solid, 75% lets the wallpaper through; controls stay opaque."),11,palette.muted,31)
-    opacityHint.Position=UDim2.fromOffset(0,857)
+    opacityHint.Position=UDim2.fromOffset(0,1145)
 
     local foliageToggle=button(page,showFoliage and L("ЛИСТВА: ВКЛ", "FOLIAGE: ON")
         or L("ЛИСТВА: ВЫКЛ", "FOLIAGE: OFF"),206,34,function()
         setFoliageVisible(not showFoliage)
         if alive then render() end
     end,showFoliage)
-    foliageToggle.Position=UDim2.fromOffset(0,909)
+    foliageToggle.Position=UDim2.fromOffset(0,1197)
     local foliageInfo=txt(page,L("Декоративные папоротники по краям. Логотип останется.",
         "Decorative corner ferns; the logo stays visible."),12,palette.muted,32)
-    foliageInfo.Position=UDim2.fromOffset(222,909)
+    foliageInfo.Position=UDim2.fromOffset(222,1197)
     foliageInfo.Size=UDim2.new(1,-230,0,32)
 
     local rememberHeading=txt(page,T("rememberTitle"),16,palette.text,28)
     rememberHeading.Font=Enum.Font.GothamBold
-    rememberHeading.Position=UDim2.fromOffset(0,967)
+    rememberHeading.Position=UDim2.fromOffset(0,1255)
     local rememberToggle=button(page,rememberMe and T("rememberOn") or T("rememberOff"),246,38,function()
         if not supportsSessionFiles then info(T("rememberUnavailable"),true);return end
         if rememberMe then
@@ -1975,29 +2025,29 @@ local function renderSettings()
         end
         if alive then render() end
     end,rememberMe)
-    rememberToggle.Position=UDim2.fromOffset(0,1002)
+    rememberToggle.Position=UDim2.fromOffset(0,1290)
     if not supportsSessionFiles then
         rememberToggle.Active=false
         rememberToggle.AutoButtonColor=false
     end
     local rememberDesc=txt(page,T("rememberHint"),12,palette.muted,34)
-    rememberDesc.Position=UDim2.fromOffset(261,1004)
+    rememberDesc.Position=UDim2.fromOffset(261,1292)
     rememberDesc.Size=UDim2.new(1,-270,0,34)
     local rememberWarning=txt(page,T("rememberWarning"),11,palette.alert,32)
-    rememberWarning.Position=UDim2.fromOffset(0,1046)
+    rememberWarning.Position=UDim2.fromOffset(0,1334)
     rememberWarning.Size=UDim2.new(1,-15,0,32)
     local recentHint=txt(page,T("recentWarning"),11,palette.alert,34)
-    recentHint.Position=UDim2.fromOffset(0,1075)
+    recentHint.Position=UDim2.fromOffset(0,1363)
     recentHint.Size=UDim2.new(1,-15,0,34)
     recentHint.TextWrapped=true
     local hideHint=txt(page,T("hide"),13,palette.muted,28)
-    hideHint.Position=UDim2.fromOffset(0,1121)
+    hideHint.Position=UDim2.fromOffset(0,1409)
     local exit=button(page,T("exit"),260,39,function()
         if global.__PaporotnicLauncherStop then global.__PaporotnicLauncherStop() end
     end,false)
-    exit.Position=UDim2.fromOffset(0,1152)
+    exit.Position=UDim2.fromOffset(0,1440)
     local note=txt(page,T("note"),12,palette.muted,36)
-    note.Position=UDim2.fromOffset(0,1194)
+    note.Position=UDim2.fromOffset(0,1482)
     note.Size=UDim2.new(1,-15,0,32)
 end
 
@@ -2051,7 +2101,8 @@ root=create("CanvasGroup",{
     Active=true,Visible=false,BackgroundColor3=palette.background,
     BorderSizePixel=0,ClipsDescendants=true,GroupTransparency=1},screen)
 corner(root,15)
-local rootStroke=create("UIStroke",{Thickness=1,Color=palette.border,Transparency=1,Enabled=false},root)
+local rootStroke=create("UIStroke",{Thickness=1,Color=palette.highlight,Transparency=1,Enabled=false},root)
+themeBindings[rootStroke]={Color="highlight"}
 premiumScale=create("UIScale",{Scale=1},root)
 local function fitPremiumWindow()
     local camera=workspace.CurrentCamera
@@ -2076,9 +2127,11 @@ local top=create("Frame",{Size=UDim2.new(1,0,0,77),Active=true,
 -- Explicit binding avoids ambiguous matching when panel color equals background.
 themeBindings[top]={BackgroundColor3="headerSurface"}
 surfaceFrames.header=top
--- Fine green bottom accent, mirroring the reference's lime header line.
-create("Frame",{Position=UDim2.fromOffset(0,75),Size=UDim2.new(1,0,0,2),
-    BackgroundColor3=palette.border,BorderSizePixel=0},top)
+-- Structural dividing line follows the user's CURRENT accent, not a stale
+-- theme's palette.border color captured when the dashboard was created.
+local headerDivider=create("Frame",{Position=UDim2.fromOffset(0,75),Size=UDim2.new(1,0,0,2),
+    BackgroundColor3=palette.highlight,BackgroundTransparency=0.60,BorderSizePixel=0},top)
+themeBindings[headerDivider]={BackgroundColor3="highlight"}
 -- Actual fern icon, manually extracted from the visual reference (not a faux P).
 local brandMark=create("Frame",{
     Name="BrandMark",Position=UDim2.fromOffset(21,13),
@@ -2101,27 +2154,32 @@ subtitle.Position=UDim2.fromOffset(79,47)
 subtitle.Size=UDim2.fromOffset(239,19)
 local accentLine=create("Frame",{Position=UDim2.fromOffset(0,75),
     Size=UDim2.fromOffset(238,2),BackgroundColor3=palette.highlight,BorderSizePixel=0},top)
+themeBindings[accentLine]={BackgroundColor3="highlight"}
 create("UIGradient",{Rotation=0,Transparency=NumberSequence.new({
     NumberSequenceKeypoint.new(0,0),NumberSequenceKeypoint.new(1,0.8)
 })},accentLine)
 
 local function headerChip(textValue,x,w)
     local chip=create("Frame",{Position=UDim2.fromOffset(x,20),Size=UDim2.fromOffset(w,36),
-        BackgroundColor3=palette.panel,BorderSizePixel=0},top)
+        BackgroundColor3=palette.headerBadges,BorderSizePixel=0},top)
     corner(chip,19)
-    create("UIStroke",{Color=palette.border,Thickness=1,Transparency=0.67},chip)
+    themeBindings[chip]={BackgroundColor3="headerBadges"}
+    table.insert(chromeRefs.headerBadges,chip)
+    local chipEdge=create("UIStroke",{Color=palette.highlight,Thickness=1,Transparency=0.86},chip)
+    themeBindings[chipEdge]={Color="highlight"}
     local t=txt(chip,textValue,11,palette.text,36,Enum.TextXAlignment.Center)
     t.Font=Enum.Font.GothamBold
     return chip,t
 end
 local stateChip,stateText=headerChip("●  ACCESS VERIFIED",326,170)
 local apiChip,apiText=headerChip("KEY SYSTEM",510,139)
-local buildChip,buildText=headerChip("HUB  v0.2.33",663,150)
+local buildChip,buildText=headerChip("HUB  v0.2.34",663,150)
 
 local profile=create("Frame",{Position=UDim2.new(1,-333,0,9),Size=UDim2.fromOffset(189,58),
-    BackgroundColor3=palette.panel,BorderSizePixel=0},top)
+    BackgroundColor3=palette.headerActions,BorderSizePixel=0},top)
 corner(profile,25)
-themeBindings[profile]={BackgroundColor3="panel"}
+themeBindings[profile]={BackgroundColor3="headerActions"}
+table.insert(chromeRefs.headerActions,profile)
 local avatar=create("ImageLabel",{Position=UDim2.fromOffset(8,6),Size=UDim2.fromOffset(46,46),
     Image="rbxthumb://type=AvatarHeadShot&id="..tostring(localPlayer.UserId).."&w=150&h=150",
     BackgroundColor3=palette.card,BorderSizePixel=0},profile)
@@ -2139,13 +2197,19 @@ premiumHeaderType.Size=UDim2.fromOffset(121,19)
 local topSettings=button(top,"⚙",36,36,function() navigateTo("settings") end,false)
 topSettings.Position=UDim2.new(1,-133,0,19)
 topSettings.TextSize=19
+themeBindings[topSettings]={BackgroundColor3="headerActions",TextColor3="text"}
+table.insert(chromeRefs.headerActions,topSettings)
 local collapse=button(top,"—",36,36,function() screen.Enabled=not screen.Enabled end,false)
 collapse.Position=UDim2.new(1,-90,0,19)
+themeBindings[collapse]={BackgroundColor3="headerActions",TextColor3="text"}
+table.insert(chromeRefs.headerActions,collapse)
 local close=button(top,"×",36,36,function()
     if type(global.__PaporotnicLauncherStop)=="function" then global.__PaporotnicLauncherStop() end
 end,false)
 close.Position=UDim2.new(1,-47,0,19)
 close.TextSize=24
+themeBindings[close]={BackgroundColor3="headerActions",TextColor3="text"}
+table.insert(chromeRefs.headerActions,close)
 
 local sidebar=create("Frame",{
     Name="DashboardSidebar",Position=UDim2.fromOffset(0,77),
@@ -2153,8 +2217,9 @@ local sidebar=create("Frame",{
     BackgroundTransparency=sidebarOpacity,BorderSizePixel=0},root)
 themeBindings[sidebar]={BackgroundColor3="sidebarSurface"}
 surfaceFrames.sidebar=sidebar
-create("Frame",{Position=UDim2.new(1,-1,0,0),Size=UDim2.new(0,1,1,0),
-    BackgroundColor3=palette.border,BorderSizePixel=0},sidebar)
+local sidebarDivider=create("Frame",{Position=UDim2.new(1,-1,0,0),Size=UDim2.new(0,1,1,0),
+    BackgroundColor3=palette.highlight,BackgroundTransparency=0.70,BorderSizePixel=0},sidebar)
+themeBindings[sidebarDivider]={BackgroundColor3="highlight"}
 sidebar.ClipsDescendants=true
 cornerFerns=create("ImageLabel",{
     Name="LayeredFernCornerDecor",Position=UDim2.fromOffset(0,-77),
@@ -2165,6 +2230,7 @@ cornerFerns=create("ImageLabel",{
 attachLayer(cornerFerns,"fernCorners")
 local sideAccent=create("Frame",{Position=UDim2.fromOffset(0,0),Size=UDim2.fromOffset(4,332),
     BorderSizePixel=0,BackgroundColor3=palette.highlight,BackgroundTransparency=0.88},sidebar)
+themeBindings[sideAccent]={BackgroundColor3="highlight"}
 create("UIGradient",{Rotation=90,Transparency=NumberSequence.new({
     NumberSequenceKeypoint.new(0,0.1),NumberSequenceKeypoint.new(1,1)
 })},sideAccent)
@@ -2190,27 +2256,29 @@ for i,row in ipairs(navOptions) do
     table.insert(sidebarButtons,{button=nav,page=page,category=category,prefix=icon,labelKey=labelKey})
 end
 local separator=create("Frame",{Position=UDim2.fromOffset(14,315),Size=UDim2.fromOffset(194,1),
-    BackgroundColor3=palette.border,BorderSizePixel=0},sidebar)
+    BackgroundColor3=palette.highlight,BackgroundTransparency=0.76,BorderSizePixel=0},sidebar)
+themeBindings[separator]={BackgroundColor3="highlight"}
 
 -- No duplicated "YOUR ACCESS" summary here: the top profile and right-hand
 -- Access Status already show the license, leaving the sidebar for actions.
 local accessSection=create("Frame",{
     Name="SidebarQuickActions",Position=UDim2.new(0,12,1,-128),
-    Size=UDim2.new(1,-25,0,111),BackgroundColor3=palette.panel,BorderSizePixel=0
+    Size=UDim2.new(1,-25,0,111),BackgroundTransparency=1,BorderSizePixel=0
 },sidebar)
-corner(accessSection,13)
-themeBindings[accessSection]={BackgroundColor3="panel"}
--- No neon border around quick actions; this area is visually quiet.
+-- Container is fully transparent: ONLY the two buttons are visible, with no
+-- violet panel/stroke/padding rectangle behind them.
 local sideSwitch=button(accessSection,T("switchKey"),170,40,function()
     if type(returnToAuthGate)=="function" then returnToAuthGate() end
 end,true)
 sideSwitch.Name="SidebarSwitchKey"
+quickActionRefs.switch=sideSwitch
 themeBindings[sideSwitch]={BackgroundColor3="highlight",TextColor3="background"}
 sideSwitch.Position=UDim2.fromOffset(13,11)
 sideSwitch.TextSize=13
 corner(sideSwitch,9)
 local sideHide=button(accessSection,"F7  ·  HIDE",170,39,function() screen.Enabled=false end,false)
 sideHide.Name="SidebarHide"
+quickActionRefs.hide=sideHide
 themeBindings[sideHide]={BackgroundColor3="card",TextColor3="text"}
 sideHide.Position=UDim2.fromOffset(13,61)
 sideHide.TextSize=14
@@ -2303,10 +2371,10 @@ renderRightRail=function()
     local updates=rrPanel(485,150)
     rrLabel(updates,L("Обновления","Latest Updates"),15,palette.text,13,8,250,28,true)
     local recent={
-        {"v0.2.33",L("Прозрачность и цвета","Sidebar & Colors")},
+        {"v0.2.34",L("Цвета кнопок и линий","Chrome Colors")},
+        {"v0.2.33",L("Прозрачность боковины","Sidebar Opacity")},
         {"v0.2.32",L("Исправления цветов и карточек","Panel & Card Fixes")},
         {"v0.2.31",L("Настройка панелей","Panel Colors")},
-        {"v0.2.30",L("Полировка интерфейса","UI Polish")},
     }
     for i,r in ipairs(recent) do
         local y=40+(i-1)*26
@@ -2799,4 +2867,4 @@ local function playLaunchIntro()
 end
 
 task.spawn(playLaunchIntro)
-print("[Paporotnic Universal Launcher] v0.2.33 | PlaceId="..tostring(game.PlaceId))
+print("[Paporotnic Universal Launcher] v0.2.34 | PlaceId="..tostring(game.PlaceId))
