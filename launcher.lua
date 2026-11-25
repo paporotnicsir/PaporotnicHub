@@ -1,4 +1,4 @@
--- PAPOROTNIC HUB | universal launcher v0.2.21
+-- PAPOROTNIC HUB | universal launcher v0.2.22
 -- 3-second loading gate, key-only entry, and quiet accent-glow interface.
 -- Based on the user's v0.2.14 launcher; auth API and game module flow preserved.
 
@@ -19,7 +19,7 @@ end
 local BASE = "https://raw.githubusercontent.com/paporotnicsir/PaporotnicHub/refs/heads/main/"
 local CATALOG_URL = BASE .. "catalog.json"
 local FALLBACK = {
-    version = "0.2.21 (offline catalog)",
+    version = "0.2.22 (offline catalog)",
     latestVersion = "Paporotnic Hub Core v0.2.8",
     lifetimePrice = "$ ?? / TBA",
     announcement = "Welcome, LIL Paporotnics! The universal hub is online.",
@@ -34,6 +34,9 @@ local FALLBACK = {
             id = "release-020", version = "v0.2.0", name = "Launcher redesign",
             summary = "Larger interface, fern background and a dedicated Releases page.",
             updates = {
+                {version = "v0.2.22", title = "Recent temporary key prefill",
+                  body = "The last verified temporary key is prefilled for manual activation. Remember Me remains opt-in for auto-login; Lifetime keys stay hidden by default.",
+                  bodyRu = "Последний подтверждённый временный ключ подставляется для ручной активации. Автовход — только через Remember Me; Lifetime без него не сохраняется."},
                 {version = "v0.2.21", title = "Optional Remember Me",
                   body = "Opt-in local session saving with a fresh server check on every startup. Switch Key clears saved access.",
                   bodyRu = "Необязательное запоминание ключа с проверкой через сервер при каждом запуске. Switch Key очищает сохранённый доступ."},
@@ -129,6 +132,10 @@ local strings = {
         rememberSaveError="Не удалось сохранить сессию. Запоминание осталось выключенным.",
         rememberDeleteError="Не удалось гарантированно удалить локальный ключ. Проверь файлы исполнителя.",
         rememberChecking="Проверяем сохранённый ключ через сервер...",
+        recentPrefilled="Ключ подставлен. Нажми «Активировать».",
+        recentForget="ЗАБЫТЬ КЛЮЧ", recentForgot="Сохранённый временный ключ удалён.",
+        recentForgetError="Не удалось очистить сохранённый временный ключ.",
+        recentWarning="Временные ключи сохраняются локально без шифрования для подстановки при следующем запуске. Не используй на общем ПК.",
         welcome="Welcome, LIL Paporotnics!", heroSub="One hub for your scripts, updates, and supported games.",
         status="АКТУАЛЬНАЯ ВЕРСИЯ", price="LIFETIME-КЛЮЧ", news="НОВОСТИ", login="АКТИВАЦИЯ",
         key="Введите ключ доступа", enter="АКТИВИРОВАТЬ", noBackend="Тестовый режим: ключи пока не включены.",
@@ -145,7 +152,7 @@ local strings = {
         releaseSub="Новости и изменения Paporotnic Hub", totalGames="Игр в каталоге", authState="Статус доступа",
         accessPublic="PUBLIC / TEST", accessGranted="Ключ активирован", accessNeed="Ожидает ключ",
         patches="ПОДОБНОВЛЕНИЙ", expandedHint="Нажми на релиз, чтобы увидеть изменения",
-        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.21 (TEST)",
+        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.22 (TEST)",
         themeHeading="ТЕМА ОФОРМЛЕНИЯ", themeHint="Изменения применяются сразу. Сохранение работает, если исполнитель поддерживает запись файлов.",
         themeForest="ЛЕСНАЯ", themeOcean="НОЧНОЙ ОКЕАН", themeEmber="ЗАКАТ", themeViolet="ФИОЛЕТОВАЯ", themeActive="ВЫБРАНО",
          gateSubtitle="Для доступа к хабу требуется ключ", gateIdle="Введите ключ для продолжения.",
@@ -165,6 +172,10 @@ local strings = {
         rememberSaveError="Could not persist your session. Remember Me remains disabled.",
         rememberDeleteError="Could not fully remove the local key. Check your executor files.",
         rememberChecking="Checking saved key with server...",
+        recentPrefilled="Temporary key prefilled. Press Activate.",
+        recentForget="FORGET KEY", recentForgot="Saved temporary key cleared.",
+        recentForgetError="Could not clear your saved temporary key.",
+        recentWarning="Temporary keys are saved locally without encryption for next-launch prefill. Avoid shared computers.",
         welcome="Welcome, LIL Paporotnics!", heroSub="One hub for your scripts, updates, and supported games.",
         status="LATEST VERSION", price="LIFETIME KEY", news="ANNOUNCEMENTS", login="ACTIVATION",
         key="Enter access key", enter="ACTIVATE", noBackend="Preview access: keys are not enabled yet.",
@@ -181,7 +192,7 @@ local strings = {
         releaseSub="News and changes for Paporotnic Hub", totalGames="Games in catalog", authState="Access status",
         accessPublic="PUBLIC / TEST", accessGranted="Key activated", accessNeed="Awaiting key",
         patches="PATCHES", expandedHint="Click a release to view its updates",
-        releaseBuild="LAUNCHER BUILD: v0.2.21 (TEST)",
+        releaseBuild="LAUNCHER BUILD: v0.2.22 (TEST)",
         themeHeading="COLOR THEME", themeHint="Themes apply instantly. Saving needs executor file access.",
         themeForest="FOREST", themeOcean="NIGHT OCEAN", themeEmber="SUNSET", themeViolet="VIOLET", themeActive="ACTIVE",
          gateSubtitle="An access key is required to continue", gateIdle="Enter your key to continue.",
@@ -229,6 +240,7 @@ local themes = {
 local themeOrder = {"forest", "ocean", "ember", "violet"}
 local settingsPath = "PaporotnicHub/preferences.json"
 local sessionPath = "PaporotnicHub/session.json"
+local recentTemporaryPath = "PaporotnicHub/recent-temporary.json"
 local supportsSessionFiles = type(readfile)=="function" and type(writefile)=="function"
 local rememberMe = false -- OFF by default; never save a key before explicit opt-in.
 local themeName = "forest"
@@ -278,6 +290,37 @@ local function readSessionKey()
     if type(data.key)~="string" or #data.key < 4 or #data.key > 128 then return nil end
     return data.key
 end
+-- Used for manual prefill ONLY. A saved temporary key is NEVER trusted as
+-- authentication, even if the file was written on a previous successful login.
+-- Deliberately never store a Lifetime key here (Lifetime may only be saved
+-- via the explicit Remember Me opt-in above).
+local function saveRecentTemporaryKey(key)
+    if not supportsSessionFiles or type(key)~="string" or #key < 4 or #key > 128 then return false end
+    ensureDataFolder()
+    return pcall(writefile, recentTemporaryPath,
+        HttpService:JSONEncode({version=1,kind="temporary",key=key}))
+end
+local function readRecentTemporaryKey()
+    if not supportsSessionFiles then return nil end
+    local ok,body=pcall(readfile,recentTemporaryPath)
+    if not ok or type(body)~="string" then return nil end
+    local parsed,data=pcall(function() return HttpService:JSONDecode(body) end)
+    if not parsed or type(data)~="table" or data.version~=1 or data.kind~="temporary" then return nil end
+    if type(data.key)~="string" or #data.key < 4 or #data.key > 128 then return nil end
+    return data.key
+end
+local function clearRecentTemporaryKey()
+    if type(delfile)=="function" then
+        local ok=pcall(delfile,recentTemporaryPath)
+        if ok then return true end
+    end
+    if type(writefile)=="function" then
+        ensureDataFolder()
+        return pcall(writefile,recentTemporaryPath,HttpService:JSONEncode({version=1}))
+    end
+    return false
+end
+
 local function clearSessionKey()
     -- delfile may not exist. Overwrite with an empty object as a fallback so
     -- stale credentials cannot be read by this launcher even after logout.
@@ -295,6 +338,7 @@ end
 local uiConnections = {}
 local alive = true
 local authenticated = false
+local approvedKeyKind = nil -- "temporary" or "lifetime", confirmed by the VPS response.
 local authMode = "server"  -- fail closed, even with an offline or stale catalog
 local selectedTab = "home"
 local statusText = ""
@@ -304,6 +348,7 @@ local verifyingKey = false
 local sessionEpoch = 0
 local returnToAuthGate = nil
 local authStatusLabel, authSubmitButton, authInput
+local recentForgetButton
 local screen, root, content, statusLabel, titleLabel, footerLabel
 local switchKeyButton -- forward declaration for language changes in Settings
 
@@ -460,6 +505,7 @@ local function verifyKey(key, onSuccess, onRejected)
     verifyingKey = true
     authenticated = false
     approvedKey = nil
+    approvedKeyKind = nil
     info(lang == "ru" and "Проверяем ключ..." or "Verifying key...")
     task.spawn(function()
         local success, result = pcall(function()
@@ -481,6 +527,11 @@ local function verifyKey(key, onSuccess, onRejected)
         if status == 200 and data.ok == true and data.code == "valid" and data.hub == "paporotnic-hub" then
             authenticated = true
             approvedKey = key
+            -- KeySystem v0.3.4 only supplies seconds_left for time-limited keys.
+            -- Unknown response shapes fail safe to Lifetime rules: never
+            -- persist credentials into recent-temporary.json on mere guesses.
+            approvedKeyKind = (type(data.seconds_left)=="number" and data.seconds_left>0)
+                and "temporary" or "lifetime"
             info(T("activated"))
             task.defer(function() if alive then render() end end)
             if type(onSuccess) == "function" then onSuccess() end
@@ -489,6 +540,7 @@ local function verifyKey(key, onSuccess, onRejected)
 
         authenticated = false
         approvedKey = nil
+        approvedKeyKind = nil
         local reason = data.code
         if status == 429 or reason == "rate_limited" then
             info(lang == "ru" and "Слишком много проверок. Попробуй позже." or "Too many attempts. Try later.", true)
@@ -861,6 +913,13 @@ local function renderSettings()
             rememberMe=false
             local cleared=clearSessionKey()
             local prefsSaved=savePreferences()
+            -- After disabling auto-login, a temporary key may still be
+            -- prefilled next time. Lifetime remains deliberately unsaved.
+            if approvedKeyKind=="temporary" and type(approvedKey)=="string" then
+                saveRecentTemporaryKey(approvedKey)
+            else
+                clearRecentTemporaryKey()
+            end
             if cleared and prefsSaved then
                 info(T("rememberDisabled"))
             else
@@ -878,6 +937,9 @@ local function renderSettings()
                 savePreferences()
                 info(T("rememberSaveError"),true)
             else
+                -- Auto-login uses session.json, so no second plaintext cache
+                -- of the key is needed in recent-temporary.json.
+                clearRecentTemporaryKey()
                 info(T("rememberEnabled"))
             end
         end
@@ -894,14 +956,19 @@ local function renderSettings()
     local rememberWarning=txt(content,T("rememberWarning"),11,palette.alert,38)
     rememberWarning.Position=UDim2.fromOffset(0,363)
     rememberWarning.Size=UDim2.new(1,-10,0,38)
+    local recentHint=txt(content,T("recentWarning"),11,palette.alert,36)
+    recentHint.Position=UDim2.fromOffset(0,395)
+    recentHint.Size=UDim2.new(1,-10,0,30)
+    recentHint.TextWrapped=true
     local hint=txt(content,T("hide"),13,palette.muted,28)
-    hint.Position=UDim2.fromOffset(0,408)
+    hint.Position=UDim2.fromOffset(0,428)
     local exit=button(content,T("exit"),260,40,function()
         if global.__PaporotnicLauncherStop then global.__PaporotnicLauncherStop() end
     end,false)
-    exit.Position=UDim2.fromOffset(0,446)
+    exit.Position=UDim2.fromOffset(0,459)
     local note=txt(content,T("note"),13,palette.muted,35)
-    note.Position=UDim2.fromOffset(0,496)
+    note.Position=UDim2.fromOffset(0,502)
+    note.Size=UDim2.new(1,-10,0,32)
     note.TextYAlignment=Enum.TextYAlignment.Top
 end
 
@@ -989,6 +1056,7 @@ local function stop()
     returnToAuthGate=nil
     authenticated=false
     approvedKey=nil
+    approvedKeyKind=nil
     if introBlur then
         pcall(function() introBlur:Destroy() end)
         introBlur = nil
@@ -1110,10 +1178,26 @@ local function playLaunchIntro()
     pad(authInput,13,0)
     create("UIStroke",{Thickness=1,Color=palette.border,Transparency=0.28},authInput)
 
+    local prefilledRecentKey=nil
+    -- A one-click privacy control on the login screen. It is visible only
+    -- when a verified temporary key has been prefilled from the local cache.
+    recentForgetButton=button(authBody,T("recentForget"),116,22,function()
+        if not alive or uiPhase~="AUTH" or verifyingKey then return end
+        local cleared=clearRecentTemporaryKey()
+        prefilledRecentKey=nil
+        if authInput then authInput.Text="" end
+        if recentForgetButton then recentForgetButton.Visible=false end
+        info(cleared and T("recentForgot") or T("recentForgetError"),not cleared)
+    end,false)
+    recentForgetButton.Name="ForgetRecentTemporaryKey"
+    recentForgetButton.Position=UDim2.fromOffset(335,179)
+    recentForgetButton.TextSize=10
+    recentForgetButton.Visible=false
+
     authStatusLabel=txt(authBody,T("gateIdle"),12,palette.muted,22)
     authStatusLabel.Name="KeyStatus"
     authStatusLabel.Position=UDim2.fromOffset(29,179)
-    authStatusLabel.Size=UDim2.new(1,-58,0,22)
+    authStatusLabel.Size=UDim2.new(1,-185,0,22)
     authStatusLabel.TextWrapped=false
 
     authSubmitButton=button(authBody,T("enter"),422,43,nil,true)
@@ -1243,17 +1327,22 @@ local function playLaunchIntro()
         sessionEpoch = sessionEpoch + 1
         rememberMe=false
         local cacheCleared=not supportsSessionFiles or clearSessionKey()
+        local recentCleared=not supportsSessionFiles or clearRecentTemporaryKey()
         local preferenceCleared=not supportsSessionFiles or savePreferences()
         authenticated=false
         approvedKey=nil
+        approvedKeyKind=nil
         selectedTab="home"
         statusText=""
         if statusLabel then statusLabel.Text="" end
         if authInput then authInput.Text="" end
+        prefilledRecentKey=nil
+        if recentForgetButton then recentForgetButton.Visible=false end
         uiPhase="AUTH"
         if authStatusLabel then
-            authStatusLabel.Text=(cacheCleared and preferenceCleared) and T("switchReady") or T("rememberDeleteError")
-            authStatusLabel.TextColor3=(cacheCleared and preferenceCleared) and palette.muted or palette.alert
+            local cacheOk=cacheCleared and recentCleared and preferenceCleared
+            authStatusLabel.Text=cacheOk and T("switchReady") or T("rememberDeleteError")
+            authStatusLabel.TextColor3=cacheOk and palette.muted or palette.alert
         end
         if authSubmitButton then
             authSubmitButton.Text=T("enter")
@@ -1283,16 +1372,26 @@ local function playLaunchIntro()
 
     local function finishActivation()
         if not alive or uiPhase~="AUTH" or not authenticated then return end
-        -- Never store a key unless Remember Me was explicitly enabled in
-        -- Settings after an earlier successful sign-in.
+        -- A verified temporary key is cached solely for MANUAL prefill.
+        -- Lifetime keys are never cached unless Remember Me was enabled.
         if rememberMe and type(approvedKey)=="string" then
             if not saveSessionKey(approvedKey) then
                 rememberMe=false
                 clearSessionKey()
                 savePreferences()
+                if approvedKeyKind=="temporary" then saveRecentTemporaryKey(approvedKey) end
                 info(T("rememberSaveError"),true)
+            else
+                clearRecentTemporaryKey()
             end
+        elseif approvedKeyKind=="temporary" and type(approvedKey)=="string" then
+            saveRecentTemporaryKey(approvedKey)
+        else
+            -- Last successful sign-in was Lifetime: do not keep a previous
+            -- temporary key as the "most recent" login.
+            clearRecentTemporaryKey()
         end
+        if not rememberMe then clearSessionKey() end -- purge any stale auto-login file
         uiPhase="UNLOCKING"
         authSubmitButton.Text=T("gateReady")
         task.delay(0.42,function()
@@ -1302,7 +1401,17 @@ local function playLaunchIntro()
 
     local function submitKey()
         if not alive or uiPhase~="AUTH" or verifyingKey then return end
-        verifyKey(authInput.Text,finishActivation)
+        local entered=authInput.Text
+        verifyKey(entered,finishActivation,function(reason)
+            -- Definitive rejection of an old prefilled temporary key.
+            -- Never erase a different cached key or clear on network errors.
+            local old=readRecentTemporaryKey()
+            if old and old==entered and (reason=="expired" or reason=="revoked" or reason=="invalid_key") then
+                clearRecentTemporaryKey()
+                prefilledRecentKey=nil
+                if recentForgetButton then recentForgetButton.Visible=false end
+            end
+        end)
     end
     connect(authSubmitButton.MouseButton1Click,submitKey)
     connect(authInput.FocusLost,function(enterPressed)
@@ -1310,6 +1419,9 @@ local function playLaunchIntro()
     end)
     connect(authInput:GetPropertyChangedSignal("Text"),function()
         if uiPhase=="AUTH" and not verifyingKey then
+            if recentForgetButton then
+                recentForgetButton.Visible=(prefilledRecentKey~=nil and authInput.Text==prefilledRecentKey)
+            end
             authStatusLabel.Text=T("gateIdle")
             authStatusLabel.TextColor3=palette.muted
         end
@@ -1353,6 +1465,17 @@ local function playLaunchIntro()
         info(T("authNeedServer"),true)
     else
         authStatusLabel.Text=T("gateIdle")
+        -- Without Remember Me, ONLY prefill the last verified temporary key;
+        -- do not attempt auto-login and never prefill Lifetime credentials.
+        if not rememberMe then
+            local lastTemporary=readRecentTemporaryKey()
+            if lastTemporary then
+                prefilledRecentKey=lastTemporary
+                authInput.Text=lastTemporary
+                authStatusLabel.Text=T("recentPrefilled")
+                if recentForgetButton then recentForgetButton.Visible=true end
+            end
+        end
         -- One auto-login attempt per launch. Even a saved key MUST pass the
         -- existing HTTPS verifier and HWID binding before revealing the hub.
         local savedKey=readSessionKey()
@@ -1369,4 +1492,4 @@ local function playLaunchIntro()
 end
 
 task.spawn(playLaunchIntro)
-print("[Paporotnic Universal Launcher] v0.2.21 | PlaceId="..tostring(game.PlaceId))
+print("[Paporotnic Universal Launcher] v0.2.22 | PlaceId="..tostring(game.PlaceId))
