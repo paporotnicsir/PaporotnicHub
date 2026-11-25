@@ -1,4 +1,4 @@
--- PAPOROTNIC HUB | universal launcher v0.2.18
+-- PAPOROTNIC HUB | universal launcher v0.2.19
 -- 3-second loading gate, key-only entry, and quiet accent-glow interface.
 -- Based on the user's v0.2.14 launcher; auth API and game module flow preserved.
 
@@ -19,7 +19,7 @@ end
 local BASE = "https://raw.githubusercontent.com/paporotnicsir/PaporotnicHub/refs/heads/main/"
 local CATALOG_URL = BASE .. "catalog.json"
 local FALLBACK = {
-    version = "0.2.18 (offline catalog)",
+    version = "0.2.19 (offline catalog)",
     latestVersion = "Paporotnic Hub Core v0.2.8",
     lifetimePrice = "$ ?? / TBA",
     announcement = "Welcome, LIL Paporotnics! The universal hub is online.",
@@ -128,7 +128,7 @@ local strings = {
         releaseSub="Новости и изменения Paporotnic Hub", totalGames="Игр в каталоге", authState="Статус доступа",
         accessPublic="PUBLIC / TEST", accessGranted="Ключ активирован", accessNeed="Ожидает ключ",
         patches="ПОДОБНОВЛЕНИЙ", expandedHint="Нажми на релиз, чтобы увидеть изменения",
-        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.18 (TEST)",
+        releaseBuild="СБОРКА ЛАУНЧЕРА: v0.2.19 (TEST)",
         themeHeading="ТЕМА ОФОРМЛЕНИЯ", themeHint="Изменения применяются сразу. Сохранение работает, если исполнитель поддерживает запись файлов.",
         themeForest="ЛЕСНАЯ", themeOcean="НОЧНОЙ ОКЕАН", themeEmber="ЗАКАТ", themeViolet="ФИОЛЕТОВАЯ", themeActive="ВЫБРАНО",
          gateSubtitle="Для доступа к хабу требуется ключ", gateIdle="Введите ключ для продолжения.",
@@ -153,7 +153,7 @@ local strings = {
         releaseSub="News and changes for Paporotnic Hub", totalGames="Games in catalog", authState="Access status",
         accessPublic="PUBLIC / TEST", accessGranted="Key activated", accessNeed="Awaiting key",
         patches="PATCHES", expandedHint="Click a release to view its updates",
-        releaseBuild="LAUNCHER BUILD: v0.2.18 (TEST)",
+        releaseBuild="LAUNCHER BUILD: v0.2.19 (TEST)",
         themeHeading="COLOR THEME", themeHint="Themes apply instantly. Saving needs executor file access.",
         themeForest="FOREST", themeOcean="NIGHT OCEAN", themeEmber="SUNSET", themeViolet="VIOLET", themeActive="ACTIVE",
          gateSubtitle="An access key is required to continue", gateIdle="Enter your key to continue.",
@@ -357,6 +357,19 @@ end
 
 local approvedKey = nil
 
+-- Some Luau executors expose gethwid(). Standard Roblox Luau does not.
+-- Never invent a fingerprint: an unsupported executor must be reported to the user.
+local function getDeviceHWID()
+    local fn = nil
+    if type(gethwid) == "function" then fn = gethwid end
+    if not fn and type(global.gethwid) == "function" then fn = global.gethwid end
+    if not fn then return nil end
+    local ok, value = pcall(fn)
+    if not ok or type(value) ~= "string" or #value < 8 or #value > 256 then return nil end
+    if not value:match("^[!-~]+$") then return nil end
+    return value -- Only sent to our own HTTPS API, never printed or stored locally.
+end
+
 local function verifyKey(key, onSuccess)
     local auth = catalog.auth or {}
     local url = auth.verifyUrl
@@ -380,7 +393,7 @@ local function verifyKey(key, onSuccess)
                 Url = url,
                 Method = "POST",
                 Headers = { ["Content-Type"] = "application/json" },
-                Body = HttpService:JSONEncode({ key = key, hub = "paporotnic-hub" }),
+                Body = HttpService:JSONEncode({ key = key, hub = "paporotnic-hub", hwid = getDeviceHWID() }),
             })
         end)
         if not alive then return end
@@ -409,6 +422,10 @@ local function verifyKey(key, onSuccess)
             info(lang == "ru" and "Срок действия ключа истёк." or "Key has expired.", true)
         elseif reason == "revoked" then
             info(lang == "ru" and "Ключ заблокирован." or "Key was revoked.", true)
+        elseif reason == "hwid_required" then
+            info(lang == "ru" and "Не удалось получить HWID устройства. Обратись в поддержку." or "Device HWID unavailable. Contact support.", true)
+        elseif reason == "hwid_mismatch" then
+            info(lang == "ru" and "HWID не совпадает. Требуется сброс привязки." or "HWID mismatch. Device reset required.", true)
         elseif status == 403 or reason == "invalid_key" then
             info(T("invalid"), true)
         else
@@ -1135,4 +1152,4 @@ local function playLaunchIntro()
 end
 
 task.spawn(playLaunchIntro)
-print("[Paporotnic Universal Launcher] v0.2.18 | PlaceId="..tostring(game.PlaceId))
+print("[Paporotnic Universal Launcher] v0.2.19 | PlaceId="..tostring(game.PlaceId))
